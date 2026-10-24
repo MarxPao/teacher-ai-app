@@ -25,7 +25,7 @@ import {
   generateExpressClassroomActivity,
   getExpressWarmupModalityOptions
 } from '@/lib/expressWarmupGenerator'
-import { getAllPdiRecords, savePdiRecord, getPdiRecordByStudentId } from '@/lib/pdiManagement'
+import { getAllPdiRecords, getPdiRecordByStudentId } from '@/lib/pdiManagement'
 import type { EditableQuestionItem } from '@/components/EditableQuestionBoxes'
 
 describe('6 Novas Funcionalidades do Teacher AI (R1 a R6)', () => {
@@ -168,13 +168,14 @@ describe('6 Novas Funcionalidades do Teacher AI (R1 a R6)', () => {
   // ─── R3: Diário de Bordo de 30 Segundos Pós-Aula (LGPD 100% Local) ──────────
   describe('R3: Diário de Bordo de 30 Segundos Pós-Aula', () => {
     beforeEach(() => {
-      // Seed Carina's PDI record so parseQuickPostClassNote can match her name
-      savePdiRecord({
+      // Seed Carina's PDI directly into localStorage so parseQuickPostClassNote can match her name
+      const pdiRecord = {
         studentId: 'student_carina_miranda_6ano',
         studentName: 'Carina Miranda de Oliveira',
         identification: { gradeCycle: '6º Ano' },
         generalObservations: { evolucaoGeral: '' }
-      } as any)
+      }
+      localStorage.setItem('teacher_pdi_records_v1', JSON.stringify({ student_carina_miranda_6ano: pdiRecord }))
     })
 
     it('analisa nota pós-aula localmente sem enviar PII, detectando turma, página e aluno com PDI', () => {

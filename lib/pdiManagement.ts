@@ -1068,3 +1068,6 @@ export function createDefaultPdi(
     updatedAt: nowIso
   }
 }
+
+export const savePdiRecord = saveStudentPdi
+export const getPdiRecordByStudentId = getStudentPdi
