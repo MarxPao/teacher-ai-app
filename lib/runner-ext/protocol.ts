@@ -31,6 +31,7 @@ export type DriverMethodName =
   | 'getBoundingBox'
   | 'inspectWriteTarget'
   | 'describeClickTarget'
+  | 'captureVisualPart'
 
 export interface DriverRpcRequest<M extends DriverMethodName = DriverMethodName> {
   channel: typeof SKILLGRAPH_RPC_CHANNEL

@@ -30,6 +30,14 @@ export interface LlmRequest {
   provider?: 'ollama' | 'groq' | 'openai' | 'google' | 'anthropic' | 'gemini'
   model?: string
   knownStudents?: Array<{ name: string; identifier?: string }>
+  /** Gap 2: imagens da tela do portal (canvas/SVG/PDF), base64 puro */
+  images?: LlmImageInput[]
+}
+
+export interface LlmImageInput {
+  ref: string
+  mimeType: 'image/png' | 'image/jpeg'
+  data: string
 }
 
 export interface LlmResponse {
@@ -37,6 +45,29 @@ export interface LlmResponse {
   text: string
   pseudonymized: boolean
   tokensCount?: number
+  /** Quantas imagens chegaram ao modelo (0 quando faltou consentimento para enviá-las) */
+  imagesSent?: number
+}
+
+/**
+ * Consentimento próprio para imagens: a pseudonimização só cobre texto, e um print de portal
+ * escolar pode mostrar nomes e notas de alunos. Sem ele, as imagens ficam na máquina.
+ */
+export const VISION_CONSENT_KEY = 'vision'
+
+const VISION_WITHHELD_NOTE =
+  '\n\n[Aviso do sistema: as imagens das regiões visuais NÃO foram enviadas (a professora não autorizou o envio de imagens da tela). Trate todas as regiões como "sem imagem".]'
+
+// Modelos do Groq com entrada de imagem (os de texto recusam o formato multimodal)
+const GROQ_VISION_MODELS = ['meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct']
+
+/** Conteúdo multimodal no formato chat/completions (OpenAI e Groq). */
+export function openAiContent(prompt: string, images: LlmImageInput[]): any[] {
+  const content: any[] = [{ type: 'text', text: prompt }]
+  for (const img of images) {
+    content.push({ type: 'text', text: `[${img.ref}]` }, { type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.data}` } })
+  }
+  return content
 }
 
 export interface CatalogSkill {
@@ -201,11 +232,17 @@ export class LlmGateway {
       const res = await fetch(`${this.ollamaUrl}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: request.model || 'llama3.2', prompt: request.prompt, stream: false }),
+        // Local: as imagens não saem da máquina, então dispensam o consentimento de visão
+        body: JSON.stringify({
+          model: request.model || (request.images?.length ? 'llama3.2-vision' : 'llama3.2'),
+          prompt: request.prompt,
+          stream: false,
+          ...(request.images?.length ? { images: request.images.map(i => i.data) } : {}),
+        }),
       })
       if (!res.ok) throw new DesktopCoreError('E_LLM_REQUEST_FAILED', `Falha no Ollama local: HTTP ${res.status}`)
       const data = await res.json()
-      return { provider: 'ollama', text: data.response || '', pseudonymized: false }
+      return { provider: 'ollama', text: data.response || '', pseudonymized: false, ...(request.images?.length ? { imagesSent: request.images.length } : {}) }
     }
 
     // Provedores em Nuvem — cascata: tenta o solicitado e depois o alternativo
@@ -276,21 +313,29 @@ export class LlmGateway {
       throw new DesktopCoreError('E_API_KEY_MISSING', `Chave de API para '${p}' não encontrada no cofre.`)
     }
 
+    // Imagens não passam pela pseudonimização: só saem com consentimento explícito de visão
+    let images: LlmImageInput[] | undefined
+    let prompt = request.prompt
+    if (request.images?.length) {
+      if (await this.consentRepo.getConsent(VISION_CONSENT_KEY)) images = request.images
+      else prompt += VISION_WITHHELD_NOTE
+    }
+
     // Pseudonimização mandatória de PII antes de deixar a máquina
-    const session = Pseudonymizer.pseudonymize(request.prompt, request.knownStudents || [])
+    const session = Pseudonymizer.pseudonymize(prompt, request.knownStudents || [])
 
     let rawOutput = ''
     if (p === 'groq') {
-      rawOutput = await this.callGroq(session.sanitizedText, apiKey, request.model)
+      rawOutput = await this.callGroq(session.sanitizedText, apiKey, request.model, images)
     } else if (p === 'google') {
-      rawOutput = await this.callGoogle(session.sanitizedText, apiKey, request.model)
+      rawOutput = await this.callGoogle(session.sanitizedText, apiKey, request.model, images)
     } else if (p === 'openai') {
-      rawOutput = await this.callOpenAi(session.sanitizedText, apiKey, request.model)
+      rawOutput = await this.callOpenAi(session.sanitizedText, apiKey, request.model, images)
     }
 
     // De-pseudonimização em memória — os tokens nunca saem da máquina
     const finalText = Pseudonymizer.depseudonymize(rawOutput, session.tokenToOriginal)
-    return { provider: p, text: finalText, pseudonymized: true }
+    return { provider: p, text: finalText, pseudonymized: true, ...(request.images?.length ? { imagesSent: images?.length ?? 0 } : {}) }
   }
 
   /**
@@ -591,10 +636,11 @@ export class LlmGateway {
     }
   }
 
-  private async callGroq(prompt: string, apiKey: string, model?: string): Promise<string> {
-    const candidateModels = model
-      ? [model, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile']
-      : ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile']
+  private async callGroq(prompt: string, apiKey: string, model?: string, images?: LlmImageInput[]): Promise<string> {
+    const textModels = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile']
+    const base = images?.length ? GROQ_VISION_MODELS : textModels
+    const candidateModels = model ? [model, ...base.filter(m => m !== model)] : base
+    const content = images?.length ? openAiContent(prompt, images) : prompt
     let lastError: Error | null = null
     for (const groqModel of candidateModels) {
       try {
@@ -606,7 +652,7 @@ export class LlmGateway {
           },
           body: JSON.stringify({
             model: groqModel,
-            messages: [{ role: 'user', content: prompt }],
+            messages: [{ role: 'user', content }],
           }),
         })
         if (!res.ok) {
@@ -631,7 +677,11 @@ export class LlmGateway {
     throw lastError || new Error('Groq API error: nenhum modelo compatível respondeu.')
   }
 
-  private async callGoogle(prompt: string, apiKey: string, model?: string): Promise<string> {
+  private async callGoogle(prompt: string, apiKey: string, model?: string, images?: LlmImageInput[]): Promise<string> {
+    const parts: any[] = [{ text: prompt }]
+    for (const img of images ?? []) {
+      parts.push({ text: `[${img.ref}]` }, { inline_data: { mime_type: img.mimeType, data: img.data } })
+    }
     const candidateModels = model
       ? [model, 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-3.6-flash']
       : ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-3.6-flash', 'gemini-1.5-pro']
@@ -645,7 +695,7 @@ export class LlmGateway {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey,
       },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      body: JSON.stringify({ contents: [{ parts }] }),
     })
         if (!res.ok) {
           const errText = await res.text().catch(() => '')
@@ -675,7 +725,8 @@ export class LlmGateway {
     throw lastError || new Error('Google Gemini API error: nenhum modelo compatível respondeu.')
   }
 
-  private async callOpenAi(prompt: string, apiKey: string, model?: string): Promise<string> {
+  private async callOpenAi(prompt: string, apiKey: string, model?: string, images?: LlmImageInput[]): Promise<string> {
+    const content = images?.length ? openAiContent(prompt, images) : prompt
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -684,7 +735,7 @@ export class LlmGateway {
       },
       body: JSON.stringify({
         model: model || 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content }],
       }),
     })
     if (!res.ok) throw new Error(`OpenAI API error: HTTP ${res.status}`)

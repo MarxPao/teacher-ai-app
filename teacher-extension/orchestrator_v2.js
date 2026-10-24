@@ -225,9 +225,10 @@
         chrome.runtime.sendMessage({ type: 'SKILLGRAPH_EVENT', event }).catch(() => {})
       },
     })
-    const complete = async (system, user) => {
+    // images: canvas/SVG/PDF da tela (gap 2); o app desktop decide se podem sair da máquina
+    const complete = async (system, user, images) => {
       if (abortController.signal.aborted) throw new Error('Execução cancelada')
-      const resp = await nativeClient.agentPlan(system, user)
+      const resp = await nativeClient.agentPlan(system, user, images && images.length ? 45000 : 30000, images)
       return String(resp?.text || '')
     }
     // A senha vem do cofre do app desktop direto para o campo; nunca passa pelo LLM nem pelos logs

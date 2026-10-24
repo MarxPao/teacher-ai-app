@@ -26,6 +26,8 @@ import { describeElements as extractDescriptors } from './elementDescriptor'
 import { highlightElement, clearHighlights } from './highlightOverlay'
 import { describeClickElement, type ClickTargetDescription } from './clickSafety'
 import { observeAgentPage, type AgentPageSnapshot } from './agentObserver'
+import { captureVisualInPage, type VisualPagePart } from './visualCapture'
+import type { VisualCapture } from '../runner/types'
 
 export class DomDriver implements Driver {
   private handleStore = new ElementHandleStore()
@@ -706,6 +708,20 @@ export class DomDriver implements Driver {
   public async observePage(options?: { maxElements?: number; maxTextChars?: number }): Promise<AgentPageSnapshot> {
     this.hostGuard()
     return observeAgentPage(this.doc, options)
+  }
+
+  /** Parte da página da captura visual; o RemoteDriver completa com recorte CDP quando precisa. */
+  public async captureVisualPart(params: { stamp: string; kind?: 'canvas' | 'svg' | 'pdf' }): Promise<VisualPagePart> {
+    this.hostGuard()
+    return captureVisualInPage(this.doc, params)
+  }
+
+  /** Sem depurador (testes, jsdom): só canvas legível vira imagem. */
+  public async captureVisual(target: { stamp: string; kind?: 'canvas' | 'svg' | 'pdf' }): Promise<VisualCapture> {
+    const part = await this.captureVisualPart(target)
+    const m = part.dataUrl?.match(/^data:(image\/(?:png|jpeg));base64,(.+)$/)
+    if (!m) throw new RunnerError('E_NODE_UNSUPPORTED', 'Esta região só pode ser vista por screenshot')
+    return { mimeType: m[1] as 'image/png' | 'image/jpeg', data: m[2], width: Math.round(part.rect.width), height: Math.round(part.rect.height), source: 'canvas' }
   }
 
   public async highlight(selector: string, mode: 'old' | 'new') {

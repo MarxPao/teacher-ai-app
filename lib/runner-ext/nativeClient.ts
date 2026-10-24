@@ -213,8 +213,14 @@ export class NativeClient {
     return this.send('nlu.parse', { text })
   }
 
-  public async agentPlan(system: string, user: string, timeoutMs = 30000): Promise<{ text: string }> {
-    return this.send('agent.plan', { system, user }, timeoutMs)
+  /** images: regiões visuais da tela (gap 2). O app desktop só as envia à nuvem com consentimento 'vision'. */
+  public async agentPlan(
+    system: string,
+    user: string,
+    timeoutMs = 30000,
+    images?: Array<{ ref: string; mimeType: 'image/png' | 'image/jpeg'; data: string }>
+  ): Promise<{ text: string; imagesSent?: number }> {
+    return this.send('agent.plan', { system, user, ...(images && images.length ? { images: images.slice(0, 3) } : {}) }, timeoutMs)
   }
 }
 

@@ -14,6 +14,7 @@ import type {
   RuntimeErrorCode,
   DownloadOptions,
   UploadOptions,
+  VisualCapture,
 } from '../runner/types'
 import { RunnerError } from '../runner/types'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
@@ -22,6 +23,7 @@ import type { AgentPageSnapshot } from '../runner-dom/agentObserver'
 import { mergeFrameSnapshots, type FrameSnapshot } from '../agent/frames'
 import { SKILLGRAPH_RPC_CHANNEL, type DriverMethodName, type DriverRpcRequest, type DriverRpcResponse } from './protocol'
 import { verifyCommittedValue } from '../runner-dom/writer'
+import { VISUAL_MAX_SIDE, type VisualPagePart } from '../runner-dom/visualCapture'
 
 declare const chrome: any
 
@@ -41,6 +43,7 @@ const IDEMPOTENT_METHODS: ReadonlySet<DriverMethodName> = new Set<DriverMethodNa
   'highlight',
   'clearHighlight',
   'getBoundingBox',
+  'captureVisualPart',
 ])
 
 const FRAME_HANDLE_RE = /^f(\d+)::(.+)$/
@@ -693,6 +696,65 @@ export class RemoteDriver implements Driver {
 
   public async clearHighlight(): Promise<void> {
     return this.sendRpc('clearHighlight', {})
+  }
+
+  /**
+   * Gap 2: imagem de um canvas, SVG ou PDF incorporado. Canvas legível sai direto da página;
+   * o resto (canvas com imagem de outra origem, SVG, visor de PDF) é um recorte do screenshot via CDP.
+   * Iframe de outra origem: as coordenadas são do quadro, então vai a tela visível inteira.
+   */
+  async captureVisual(target: { stamp: string; kind?: 'canvas' | 'svg' | 'pdf'; frameId?: number }): Promise<VisualCapture> {
+    const frameId = typeof target.frameId === 'number' ? target.frameId : 0
+    const part = await this.sendRpc<VisualPagePart>('captureVisualPart', { stamp: target.stamp, kind: target.kind }, 1, frameId)
+    const width = Math.round(part.rect.width)
+    const height = Math.round(part.rect.height)
+    const m = part.dataUrl?.match(/^data:(image\/(?:png|jpeg));base64,(.+)$/)
+    if (m) return { mimeType: m[1] as 'image/png' | 'image/jpeg', data: m[2], width, height, source: 'canvas' }
+
+    // PDF é página de texto/foto: JPEG fica bem menor. Gráfico é traço fino: PNG.
+    const format: 'png' | 'jpeg' = part.kind === 'pdf' ? 'jpeg' : 'png'
+    const mimeType = format === 'png' ? 'image/png' : 'image/jpeg'
+    if (this.hasDebugger()) {
+      const params: any = { format, ...(format === 'jpeg' ? { quality: 80 } : {}) }
+      if (frameId === 0 && width > 0 && height > 0) {
+        params.captureBeyondViewport = true
+        params.clip = {
+          x: Math.max(0, part.rect.x + part.scroll.x),
+          y: Math.max(0, part.rect.y + part.scroll.y),
+          width,
+          height,
+          scale: Math.min(1, VISUAL_MAX_SIDE / Math.max(width, height)),
+        }
+      }
+      const res = await this.cdpCall<{ data: string }>('Page.captureScreenshot', params).catch(() => null)
+      if (res?.data) return { mimeType, data: res.data, width, height, source: 'screenshot' }
+    }
+    // Sem depurador: a tela visível inteira (a região já foi rolada para o centro)
+    if (typeof chrome !== 'undefined' && chrome.tabs?.captureVisibleTab) {
+      const tab = await chrome.tabs.get(this.tabId)
+      const url: string = await chrome.tabs.captureVisibleTab(tab.windowId, { format, ...(format === 'jpeg' ? { quality: 80 } : {}) })
+      const mm = url?.match(/^data:image\/\w+;base64,(.+)$/)
+      if (mm) return { mimeType, data: mm[1], width, height, source: 'screenshot' }
+    }
+    throw new RunnerError('E_NODE_UNSUPPORTED', 'Não foi possível capturar a imagem desta região')
+  }
+
+  /** Um comando CDP com resposta (anexa, envia, desanexa). */
+  private cdpCall<T>(method: string, params: any): Promise<T> {
+    const dbg = (chrome as any).debugger
+    const target = { tabId: this.tabId }
+    return new Promise<T>((resolve, reject) => {
+      dbg.attach(target, '1.3', () => {
+        // Já anexado (lastError) não impede o envio
+        void chrome.runtime?.lastError
+        dbg.sendCommand(target, method, params, (result: T) => {
+          const err = chrome.runtime?.lastError
+          dbg.detach(target, () => void chrome.runtime?.lastError)
+          if (err || !result) reject(new Error(err?.message || `${method} sem resposta`))
+          else resolve(result)
+        })
+      })
+    })
   }
 
   /** Gap 2: screenshot local via CDP — sem tráfego externo */

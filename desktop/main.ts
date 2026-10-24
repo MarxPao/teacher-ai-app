@@ -232,8 +232,9 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       const res = await llmGateway.complete({
         prompt: `${params.system}\n\n${params.user}`,
         provider: params.provider,
+        ...(params.images?.length ? { images: params.images } : {}),
       })
-      return { text: res.text }
+      return { text: res.text, ...(params.images?.length ? { imagesSent: res.imagesSent ?? 0 } : {}) }
     }
 
     case 'llm.generateText': {

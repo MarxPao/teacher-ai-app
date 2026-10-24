@@ -4,10 +4,10 @@
 // reencontrando cada elemento pela assinatura semântica; (2) o agente com LLM, que assume quando
 // não há roteiro ou quando um passo do roteiro não casa com a tela (e depois o replay retoma).
 
-import type { Driver, Host, ElementTarget, ResolvedAnchor, ResolvedCandidate } from '../runner/types'
+import type { Driver, Host, ElementTarget, ResolvedAnchor, ResolvedCandidate, VisualCapture } from '../runner/types'
 import type { ElementDescriptor } from '../recorder/traceSchema'
 import { sanitizeStructuralLabel } from '../explorer/domDistiller'
-import { AGENT_STAMP_ATTR, type AgentPageSnapshot } from '../runner-dom/agentObserver'
+import { AGENT_STAMP_ATTR, type AgentPageSnapshot, type AgentVisual } from '../runner-dom/agentObserver'
 import { derivePolicy, policyBlocks, type TaskPolicy } from './taskPolicy'
 import {
   describeRecorded,
@@ -54,6 +54,31 @@ export interface Observation {
   text?: string
   dialogOpen?: boolean
   omitted?: number
+  /** Gráficos (canvas/SVG) e PDFs incorporados que o DOM não descreve */
+  visuals?: ObservedVisual[]
+}
+
+export interface ObservedVisual {
+  ref: string
+  stamp: string
+  kind: AgentVisual['kind']
+  label: string
+  width: number
+  height: number
+  region?: AgentVisual['region']
+  text?: string
+  src?: string
+  inFrame?: boolean
+  frameId?: number
+}
+
+/** Imagem de uma região visual, anexada à chamada do planner (fica local até o app desktop decidir). */
+export interface PlannerImage {
+  ref: string
+  kind: AgentVisual['kind']
+  label: string
+  mimeType: VisualCapture['mimeType']
+  data: string
 }
 
 export type AgentKey = 'Enter' | 'Escape' | 'Tab' | 'ArrowDown' | 'ArrowUp'
@@ -88,6 +113,8 @@ export interface PlannerInput {
   files?: string[]
   /** Há credencial salva para este portal (o valor nunca é mostrado) */
   hasCredential?: boolean
+  /** Imagens das regiões visuais desta tela (gap 2) */
+  images?: PlannerImage[]
 }
 
 /** O planner pode devolver uma ação ou um lote de ações para a mesma tela. */
@@ -98,6 +125,7 @@ export interface VerifyInput {
   observation: Observation
   history: string[]
   claim: string
+  images?: PlannerImage[]
 }
 
 export type Verifier = (input: VerifyInput) => Promise<{ achieved: boolean; reason: string }>
@@ -126,6 +154,11 @@ export interface ReasoningLoopConfig {
   trustedInput?: boolean
   /** Máximo de ações num lote do planner. Padrão 5. */
   maxBatch?: number
+  /**
+   * Gap 2: captura imagens de canvas/SVG/PDF da tela e anexa ao planner. Padrão: ligado quando o
+   * driver tem captureVisual. false desliga.
+   */
+  vision?: false | { maxImagesPerStep?: number }
 }
 
 export interface ReasoningLoopResult {
@@ -219,7 +252,18 @@ export function observationFromSnapshot(snap: AgentPageSnapshot): Observation {
   const stateHash = fnv1a(
     snap.url + '|' + elements.map(e => `${e.tag}:${e.label}:${e.value ?? ''}:${e.checked ?? ''}:${e.expanded ?? ''}:${e.filled ?? ''}`).join('|') + '|' + fnv1a(text)
   )
-  return { url: snap.url, stateHash, elements, title: snap.title, text, dialogOpen: snap.dialogOpen, omitted: snap.omitted }
+  const obs: Observation = { url: snap.url, stateHash, elements, title: snap.title, text, dialogOpen: snap.dialogOpen, omitted: snap.omitted }
+  if (snap.visuals && snap.visuals.length) {
+    obs.visuals = snap.visuals.map(v => {
+      const o: ObservedVisual = { ref: v.ref, stamp: v.stamp, kind: v.kind, label: sanitizeStructuralLabel(v.label || ''), width: v.width, height: v.height, region: v.region }
+      if (v.text) o.text = sanitizeStructuralText(v.text)
+      if (v.src) o.src = v.src
+      if (v.inFrame) o.inFrame = true
+      if (typeof v.frameId === 'number') o.frameId = v.frameId
+      return o
+    })
+  }
+  return obs
 }
 
 // O texto da página passa pela mesma proteção de PII dos rótulos, linha a linha.
@@ -281,6 +325,8 @@ export class ReasoningLoopExecutor {
   private readonly runId: string
   private policy: TaskPolicy | null = null
   private blocked = 0
+  /** Imagens já capturadas por estado da tela: replanejar na mesma tela não recaptura */
+  private visualCache = new Map<string, PlannerImage | null>()
 
   constructor(
     private readonly driver: Driver,
@@ -429,11 +475,12 @@ export class ReasoningLoopExecutor {
       // ── Modo agente: o LLM decide (uma ação ou um lote) ─────────────────────
       let planned: AgentAction[] | undefined
       let plannerError = ''
+      const images = await this.captureVisuals(obs)
       for (let attempt = 0; attempt < 2 && !planned; attempt++) {
         try {
           plannerCalls++
           const out = await this.withTimeout(
-            this.planner({ task, observation: obs, history, notes, files: Object.keys(this.config.files ?? {}), hasCredential }),
+            this.planner({ task, observation: obs, history, notes, files: Object.keys(this.config.files ?? {}), hasCredential, ...(images.length ? { images } : {}) }),
             'planner'
           )
           planned = (Array.isArray(out) ? out : [out]).slice(0, this.config.maxBatch ?? 5)
@@ -517,7 +564,11 @@ export class ReasoningLoopExecutor {
         }
         let verdict: { achieved: boolean; reason: string }
         try {
-          verdict = await this.withTimeout(this.config.verify({ task, observation: verifyObs, history, claim: terminal.reason }), 'verificador')
+          const verifyImages = await this.captureVisuals(verifyObs)
+          verdict = await this.withTimeout(
+            this.config.verify({ task, observation: verifyObs, history, claim: terminal.reason, ...(verifyImages.length ? { images: verifyImages } : {}) }),
+            'verificador'
+          )
         } catch (e: any) {
           return finish({ success: false, stepsTaken: step, finalUrl: url, error: `Verificação falhou: ${e.message}`, stoppedFor: 'verification_failed' })
         }
@@ -536,6 +587,44 @@ export class ReasoningLoopExecutor {
       }
     }
     return finish({ success: false, stepsTaken: this.maxSteps, finalUrl: url, error: `Limite de ${this.maxSteps} passos`, stoppedFor: 'max_steps' })
+  }
+
+  // ── Visão (gap 2) ───────────────────────────────────────────────────────────
+
+  /**
+   * Captura as regiões visuais da tela (maiores e do conteúdo principal primeiro). Falha de
+   * captura nunca derruba a tarefa: o planner segue com o texto que o DOM tiver.
+   */
+  private async captureVisuals(obs: Observation): Promise<PlannerImage[]> {
+    if (this.config.vision === false || !this.driver.captureVisual || !obs.visuals?.length) return []
+    const max = this.config.vision?.maxImagesPerStep ?? 2
+    if (max <= 0) return []
+    const order = { dialog: 0, main: 1, other: 2, nav: 3 } as const
+    const candidates = [...obs.visuals].sort(
+      (a, b) => order[a.region ?? 'other'] - order[b.region ?? 'other'] || b.width * b.height - a.width * a.height
+    )
+    const out: PlannerImage[] = []
+    for (const v of candidates) {
+      if (out.length >= max) break
+      // O carimbo muda a cada observação; a chave é o estado da tela + a posição do visual nela
+      const key = `${obs.stateHash}|${v.ref}|${v.kind}|${v.width}x${v.height}`
+      let img = this.visualCache.get(key)
+      if (img === undefined) {
+        try {
+          const cap = await this.withTimeout(
+            this.driver.captureVisual({ stamp: v.stamp, kind: v.kind, ...(typeof v.frameId === 'number' ? { frameId: v.frameId } : {}) }),
+            'captura visual'
+          )
+          img = cap?.data ? { ref: v.ref, kind: v.kind, label: v.label, mimeType: cap.mimeType, data: cap.data } : null
+        } catch {
+          img = null
+        }
+        if (this.visualCache.size > 50) this.visualCache.clear()
+        this.visualCache.set(key, img)
+      }
+      if (img) out.push(img)
+    }
+    return out
   }
 
   // ── Roteiro ────────────────────────────────────────────────────────────────

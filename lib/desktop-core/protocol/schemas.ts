@@ -188,6 +188,17 @@ export const MethodParamSchemas = {
     system: z.string().min(1).max(4000),
     user: z.string().min(1).max(40000),
     provider: z.enum(['ollama', 'groq', 'openai']).optional(),
+    // Gap 2: imagens de canvas/SVG/PDF da tela (base64 puro, até ~2 MB cada)
+    images: z
+      .array(
+        z.object({
+          ref: z.string().min(1).max(8),
+          mimeType: z.enum(['image/png', 'image/jpeg']),
+          data: z.string().min(1).max(2_800_000).regex(/^[A-Za-z0-9+/=]+$/),
+        }).strict()
+      )
+      .max(3)
+      .optional(),
   }).strict(),
 
   'data.exportStudent': z.object({

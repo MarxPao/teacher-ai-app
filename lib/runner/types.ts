@@ -199,6 +199,22 @@ export interface Driver {
   clearHighlight?(): Promise<void>
   /** Gap 2: captura screenshot PNG local via CDP. Disponível no RemoteDriver. */
   captureScreenshot?(): Promise<{ dataUrl: string; mimeType: 'image/png' }>
+  /**
+   * Gap 2: imagem de uma região visual que o DOM não descreve (canvas, SVG, PDF incorporado),
+   * apontada pelo carimbo que o observador deixou (AgentVisual.stamp). Tudo local; quem decide
+   * se a imagem sai da máquina é o app desktop.
+   */
+  captureVisual?(target: { stamp: string; kind?: 'canvas' | 'svg' | 'pdf'; frameId?: number }): Promise<VisualCapture>
+}
+
+export interface VisualCapture {
+  mimeType: 'image/png' | 'image/jpeg'
+  /** Base64 puro (sem o prefixo data:) */
+  data: string
+  width?: number
+  height?: number
+  /** De onde veio a imagem: o próprio canvas ou um recorte do screenshot da aba */
+  source: 'canvas' | 'screenshot'
 }
 
 export interface DownloadOptions {

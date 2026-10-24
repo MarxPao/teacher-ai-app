@@ -33,6 +33,28 @@ export interface AgentElement {
   attrs?: { id?: string; name?: string; ariaLabel?: string; placeholder?: string; testId?: string; autocomplete?: string; labelText?: string }
 }
 
+/**
+ * Região visual que o DOM não descreve (gráfico em canvas, gráfico SVG, PDF incorporado).
+ * O agente pede a imagem dela ao driver (captureVisual) quando precisa enxergar.
+ */
+export interface AgentVisual {
+  /** Referência para o planner: V0, V1... */
+  ref: string
+  stamp: string
+  kind: 'canvas' | 'svg' | 'pdf'
+  /** aria-label, title, legenda (figcaption) ou título próximo */
+  label: string
+  width: number
+  height: number
+  region: 'dialog' | 'main' | 'nav' | 'other'
+  /** Textos que o próprio SVG carrega (eixos, legendas, valores), quando houver */
+  text?: string
+  /** Endereço do PDF (só o caminho, sem query string, para não vazar tokens de sessão) */
+  src?: string
+  inFrame?: boolean
+  frameId?: number
+}
+
 export interface AgentPageSnapshot {
   url: string
   title: string
@@ -40,7 +62,11 @@ export interface AgentPageSnapshot {
   text: string
   dialogOpen: boolean
   omitted: number
+  /** Canvas, SVG grandes e PDFs incorporados visíveis */
+  visuals?: AgentVisual[]
 }
+
+export const AGENT_VISUAL_ATTR = 'data-tai-visual'
 
 const INTERACTIVE =
   'a[href], button, input, select, textarea, summary, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], [role="menuitem"], [role="combobox"], [role="switch"], [contenteditable="true"], [onclick]'
@@ -213,6 +239,117 @@ function pageText(doc: Document, dialog: Element | null, maxChars: number): stri
   return text.length > maxChars ? text.slice(0, maxChars) + '\n[...texto truncado]' : text
 }
 
+// ── Regiões visuais ─────────────────────────────────────────────────────────
+
+const MIN_CANVAS = { w: 100, h: 60 }
+// SVG menor que isso é ícone, não gráfico
+const MIN_SVG = { w: 150, h: 100 }
+
+function isPdfElement(el: Element): string | null {
+  const tag = el.tagName.toLowerCase()
+  if (tag !== 'embed' && tag !== 'object' && tag !== 'iframe') return null
+  const type = (el.getAttribute('type') || '').toLowerCase()
+  const src = el.getAttribute(tag === 'object' ? 'data' : 'src') || ''
+  const looksPdf = type === 'application/pdf' || /\.pdf(?:$|[?#])/i.test(src) || /[?&](?:format|type)=pdf\b/i.test(src)
+  return looksPdf ? src || '(pdf)' : null
+}
+
+function stripQuery(src: string, base: string): string {
+  try {
+    const u = new URL(src, base)
+    return u.origin + u.pathname
+  } catch {
+    return src.split(/[?#]/)[0]
+  }
+}
+
+function visualLabel(el: Element): string {
+  const aria = el.getAttribute('aria-label')
+  if (aria && clean(aria)) return clean(aria)
+  const doc = el.ownerDocument
+  const labelledBy = el.getAttribute('aria-labelledby')
+  if (labelledBy && doc) {
+    const t = labelledBy.split(/\s+/).map(id => doc.getElementById(id)?.textContent || '').join(' ')
+    if (clean(t)) return clean(t)
+  }
+  const title = el.getAttribute('title') || (el.tagName.toLowerCase() === 'svg' ? el.querySelector(':scope > title')?.textContent : '')
+  if (title && clean(title)) return clean(title)
+  const fig = el.closest('figure')?.querySelector('figcaption')
+  if (fig?.textContent && clean(fig.textContent)) return clean(fig.textContent)
+  let node: Element | null = el.parentElement
+  for (let depth = 0; node && depth < 4; depth++, node = node.parentElement) {
+    const h = node.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5')
+    if (h && clean(h.textContent)) return clean(h.textContent, 60)
+  }
+  return ''
+}
+
+function svgText(svg: Element, max = 400): string | undefined {
+  const parts = Array.from(svg.querySelectorAll('text, desc'))
+    .map(t => clean(t.textContent, 40))
+    .filter(Boolean)
+  const uniq = Array.from(new Set(parts))
+  const t = uniq.join(' | ')
+  return t ? t.slice(0, max) : undefined
+}
+
+function collectVisuals(root: Document, dialog: Element | null, nonce: string, max = 6): AgentVisual[] {
+  const found: Array<{ el: Element; kind: AgentVisual['kind']; src?: string; inFrame: boolean; area: number }> = []
+  const walk = (doc: Document | ShadowRoot, inFrame: boolean) => {
+    for (const el of Array.from(doc.querySelectorAll('canvas, svg, embed, object, iframe'))) {
+      const tag = el.tagName.toLowerCase()
+      try {
+        const pdf = isPdfElement(el)
+        if (pdf && isVisible(el)) {
+          const r = el.getBoundingClientRect()
+          found.push({ el, kind: 'pdf', src: pdf, inFrame, area: r.width * r.height })
+          continue
+        }
+        if (tag === 'iframe') {
+          const d = (el as HTMLIFrameElement).contentDocument
+          if (d && isVisible(el)) walk(d, true)
+          continue
+        }
+        if (tag !== 'canvas' && tag !== 'svg') continue
+        // SVG dentro de outro SVG, ou dentro de botão/link: é parte de um ícone
+        if (tag === 'svg' && (el.parentElement?.closest('svg, button, a[href], [role="button"]'))) continue
+        const r = el.getBoundingClientRect()
+        const min = tag === 'canvas' ? MIN_CANVAS : MIN_SVG
+        if (r.width < min.w || r.height < min.h || !isVisible(el)) continue
+        found.push({ el, kind: tag as 'canvas' | 'svg', inFrame, area: r.width * r.height })
+      } catch {}
+    }
+  }
+  // Remove carimbos antigos para que V0 nunca aponte para o gráfico errado
+  for (const old of Array.from(root.querySelectorAll(`[${AGENT_VISUAL_ATTR}]`))) old.removeAttribute(AGENT_VISUAL_ATTR)
+  walk(root, false)
+  const filtered = dialog ? found.filter(f => dialog.contains(f.el)) : found
+  // Maiores primeiro (o gráfico principal antes das miniaturas), depois corta
+  const chosen = [...filtered].sort((a, b) => b.area - a.area).slice(0, max)
+  const base = root.location?.href || ''
+  return chosen.map((f, i) => {
+    const stamp = `${nonce}-v${i}`
+    f.el.setAttribute(AGENT_VISUAL_ATTR, stamp)
+    const r = f.el.getBoundingClientRect()
+    const v: AgentVisual = {
+      ref: `V${i}`,
+      stamp,
+      kind: f.kind,
+      label: visualLabel(f.el),
+      width: Math.round(r.width),
+      height: Math.round(r.height),
+      region: regionOf(f.el, dialog),
+    }
+    if (f.kind === 'svg') {
+      const t = svgText(f.el)
+      if (t) v.text = t
+    }
+    if (f.kind === 'pdf' && f.src) v.src = stripQuery(f.src, base)
+    if (f.inFrame) v.inFrame = true
+    return v
+  })
+}
+
 export function observeAgentPage(doc: Document, opts: { maxElements?: number; maxTextChars?: number } = {}): AgentPageSnapshot {
   const maxElements = opts.maxElements ?? 120
   const nonce = Math.random().toString(36).slice(2, 6)
@@ -287,5 +424,6 @@ export function observeAgentPage(doc: Document, opts: { maxElements?: number; ma
     text: pageText(doc, dialog, opts.maxTextChars ?? 4000),
     dialogOpen: !!dialog,
     omitted: Math.max(0, ranked.length - chosen.length),
+    visuals: collectVisuals(doc, dialog, nonce),
   }
 }
