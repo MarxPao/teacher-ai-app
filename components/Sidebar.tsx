@@ -1,80 +1,92 @@
 'use client'
-import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT, SPACE } from '@/styles/tokens'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { ModuleKey } from '@/app/page'
 import TeacherLogo from '@/components/TeacherLogo'
+import Icon from '@/components/Icon'
 
 interface NavItem { key: ModuleKey; label: string; icon: string }
 interface Section { label: string; items: NavItem[] }
 
 const NAV: Section[] = [
   { label: '', items: [
-    { key: 'dashboard', label: 'Início', icon: 'ti-home-2' },
+    { key: 'dashboard', label: 'Início', icon: 'home-2' },
   ]},
   { label: 'Organização', items: [
-    { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
-    { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
-    { key: 'organization',   label: 'Escolas',               icon: 'ti-building-community' },
-    { key: 'insights',       label: 'Insights',              icon: 'ti-bulb' },
-    { key: 'checklist',      label: 'Checklist',             icon: 'ti-list-check' },
-    { key: 'repo',           label: 'Biblioteca',            icon: 'ti-books' },
-    { key: 'bncc',           label: 'Central BNCC',          icon: 'ti-certificate' },
-    { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
-    { key: 'lessonstudio',   label: 'Planejamento',          icon: 'ti-chalkboard' },
-    { key: 'didacticsequence', label: 'Sequência Didática',  icon: 'ti-layers-linked' },
+    { key: 'students',       label: 'Alunos',                icon: 'user-circle' },
+    { key: 'classes',        label: 'Turmas',                icon: 'school' },
+    { key: 'organization',   label: 'Escolas',               icon: 'building-community' },
+    { key: 'insights',       label: 'Insights',              icon: 'bulb' },
+    { key: 'checklist',      label: 'Checklist',             icon: 'list-check' },
+    { key: 'repo',           label: 'Biblioteca',            icon: 'books' },
+    { key: 'bncc',           label: 'Central BNCC',          icon: 'certificate' },
+    { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'user-dollar' },
+    { key: 'lessonstudio',   label: 'Planejamento',          icon: 'chalkboard' },
+    { key: 'didacticsequence', label: 'Sequência Didática',  icon: 'layers-linked' },
   ]},
   { label: 'Área do Professor', items: [
-    { key: 'maestro',             label: 'Maestro',                 icon: 'ti-subtask' },
-    { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'ti-heart' },
-    { key: 'calendar',            label: 'Calendário',              icon: 'ti-calendar' },
-    { key: 'mindmap',             label: 'Mapa Mental',             icon: 'ti-hierarchy-2' },
-    { key: 'meetingclassrecorder',label: 'Diário de Aulas',         icon: 'ti-notebook' },
-    { key: 'classlog',            label: 'Registro de Aula',        icon: 'ti-book' },
-    { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'ti-bulb' },
+    { key: 'maestro',             label: 'Maestro',                 icon: 'subtask' },
+    { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'heart' },
+    { key: 'calendar',            label: 'Calendário',              icon: 'calendar' },
+    { key: 'mindmap',             label: 'Mapa Mental',             icon: 'hierarchy-2' },
+    { key: 'meetingclassrecorder',label: 'Diário de Aulas',         icon: 'notebook' },
+    { key: 'classlog',            label: 'Registro de Aula',        icon: 'book' },
+    { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'bulb' },
   ]},
   { label: 'Criação', items: [
-    { key: 'test_and_worksheets', label: 'Test & Worksheets',     icon: 'ti-file-certificate' },
-    { key: 'qbank',               label: 'Banco de Atividades',   icon: 'ti-archive' },
-    { key: 'visualstudio',        label: 'Estúdio Visual & Artes',icon: 'ti-palette' },
-    { key: 'eventos',             label: 'Eventos Escolares',     icon: 'ti-sparkles' },
-    { key: 'rubric',              label: 'Rubrica & Gabarito',    icon: 'ti-list-check' },
-    { key: 'editor',              label: 'Editor de Documentos',  icon: 'ti-file-pencil' },
-    { key: 'audiopronunciation',  label: 'Pronúncia & Áudio',     icon: 'ti-microphone' },
+    { key: 'test_and_worksheets', label: 'Test & Worksheets',     icon: 'file-certificate' },
+    { key: 'qbank',               label: 'Banco de Atividades',   icon: 'archive' },
+    { key: 'visualstudio',        label: 'Estúdio Visual & Artes',icon: 'palette' },
+    { key: 'eventos',             label: 'Eventos Escolares',     icon: 'sparkles' },
+    { key: 'rubric',              label: 'Rubrica & Gabarito',    icon: 'list-check' },
+    { key: 'editor',              label: 'Editor de Documentos',  icon: 'file-pencil' },
+    { key: 'audiopronunciation',  label: 'Pronúncia & Áudio',     icon: 'microphone' },
   ]},
   { label: 'Em Sala de Aula', items: [
-    { key: 'flashcardmode',      label: 'Flashcards',           icon: 'ti-cards' },
-    { key: 'livequiz',           label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
-    { key: 'classroommode',      label: 'Auxiliar de Sala',     icon: 'ti-layout-dashboard' },
-    { key: 'attendancelist',     label: 'Lista de Presença',    icon: 'ti-list-check' },
-    { key: 'classroomanalytics', label: 'Classroom Analytics',  icon: 'ti-device-analytics' },
+    { key: 'flashcardmode',      label: 'Flashcards',           icon: 'layers' },
+    { key: 'livequiz',           label: 'Quiz ao Vivo',         icon: 'device-gamepad-2' },
+    { key: 'classroommode',      label: 'Auxiliar de Sala',     icon: 'layout-dashboard' },
+    { key: 'attendancelist',     label: 'Lista de Presença',    icon: 'list-check' },
+    { key: 'classroomanalytics', label: 'Classroom Analytics',  icon: 'device-analytics' },
   ]},
   { label: 'Alunos & Avaliação', items: [
-    { key: 'omnigrader',     label: 'OmniCorretor',          icon: 'ti-camera' },
-    { key: 'gradebook',      label: 'Caderneta de Notas',    icon: 'ti-chart-bar' },
-    { key: 'analytics',      label: 'Desempenho & Evolução', icon: 'ti-chart-line' },
+    { key: 'omnigrader',     label: 'OmniCorretor',          icon: 'camera' },
+    { key: 'gradebook',      label: 'Caderneta de Notas',    icon: 'chart-bar' },
+    { key: 'analytics',      label: 'Desempenho & Evolução', icon: 'chart-line' },
   ]},
   { label: 'Comunicação', items: [
-    { key: 'portfolio',      label: 'Portfólio',           icon: 'ti-award' },
-    { key: 'communications', label: 'Comunicação',         icon: 'ti-brand-whatsapp' },
-    { key: 'autoreport',     label: 'Relatórios Mensais',  icon: 'ti-file-report' },
+    { key: 'portfolio',      label: 'Portfólio',           icon: 'award' },
+    { key: 'communications', label: 'Comunicação',         icon: 'brand-whatsapp' },
+    { key: 'autoreport',     label: 'Relatórios Mensais',  icon: 'file-report' },
   ]},
   { label: 'Configurações', items: [
-    { key: 'settings',   label: 'Preferências',               icon: 'ti-settings' },
-    { key: 'skills',     label: 'Skills dos Portais',         icon: 'ti-sparkles' },
-    { key: 'api',        label: 'Modelos de IA',              icon: 'ti-brain' },
-    { key: 'extensions', label: 'Portais Conectados & Extensões', icon: 'ti-plug-connected' },
+    { key: 'settings',   label: 'Preferências',               icon: 'settings' },
+    { key: 'skills',     label: 'Skills dos Portais',         icon: 'sparkles' },
+    { key: 'api',        label: 'Modelos de IA',              icon: 'brain' },
+    { key: 'extensions', label: 'Portais Conectados & Extensões', icon: 'plug-connected' },
   ]},
 ]
+
+// Ícones de seção (Lucide names)
+const SECTION_ICONS: Record<string, string> = {
+  'Organização': 'building-community',
+  'Área do Professor': 'user-circle',
+  'Criação': 'sparkles',
+  'Em Sala de Aula': 'chalkboard',
+  'Alunos & Avaliação': 'chart-bar',
+  'Comunicação': 'brand-whatsapp',
+  'Configurações': 'settings',
+}
 
 export type WorkspaceMode = 'all' | 'prep' | 'classroom' | 'admin' | 'insights'
 
 const WORKSPACE_TABS: Array<{ mode: WorkspaceMode; label: string; icon: string }> = [
-  { mode: 'all',       label: 'Todos',       icon: 'ti-layout-grid' },
-  { mode: 'prep',      label: 'Preparação',  icon: 'ti-chalkboard' },
-  { mode: 'classroom', label: 'Sala de Aula',icon: 'ti-presentation' },
-  { mode: 'admin',     label: 'Portais',     icon: 'ti-plug-connected' },
-  { mode: 'insights',  label: 'Alunos',      icon: 'ti-chart-line' },
+  { mode: 'all',       label: 'Todos',       icon: 'layout-grid' },
+  { mode: 'prep',      label: 'Preparação',  icon: 'chalkboard' },
+  { mode: 'classroom', label: 'Sala de Aula',icon: 'presentation' },
+  { mode: 'admin',     label: 'Portais',     icon: 'plug-connected' },
+  { mode: 'insights',  label: 'Alunos',      icon: 'chart-line' },
 ]
 
 const WORKSPACE_MODULES: Record<WorkspaceMode, ModuleKey[]> = {
@@ -125,7 +137,6 @@ export default function Sidebar({ active, onNavigate }: Props) {
 
   const isExpanded = isPinned || isHovered
 
-  // Controle de seções colapsáveis (acordeão atomizado)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     const activeSection = NAV.find(sec => sec.items.some(it => it.key === active))
     if (activeSection && activeSection.label) {
@@ -134,7 +145,6 @@ export default function Sidebar({ active, onNavigate }: Props) {
     return {}
   })
 
-  // Garante que a seção do item ativo abra automaticamente ao navegar
   useEffect(() => {
     const activeSection = NAV.find(sec => sec.items.some(it => it.key === active))
     if (activeSection && activeSection.label) {
@@ -155,36 +165,38 @@ export default function Sidebar({ active, onNavigate }: Props) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        width: isExpanded ? 320 : 82,
+        width: isExpanded ? 256 : 64,
         flexShrink: 0,
         height: '100vh',
         overflowY: 'auto',
         overflowX: 'hidden',
-        background: 'linear-gradient(180deg, #2e1a0c 0%, #231408 100%)',
+        // Fundo mais elegante: camadas de profundidade em vez de gradiente linear simples
+        background: 'linear-gradient(180deg, #261608 0%, #1e1007 50%, #170c05 100%)',
+        borderRight: '1px solid rgba(255,220,170,0.06)',
         boxShadow: isExpanded
-          ? '4px 0 28px rgba(28,17,10,0.32)'
-          : '2px 0 10px rgba(28,17,10,0.18)',
+          ? '6px 0 32px rgba(0,0,0,0.45), 1px 0 0 rgba(255,220,170,0.06)'
+          : '2px 0 12px rgba(0,0,0,0.3)',
         display: 'flex',
         flexDirection: 'column',
-        padding: isExpanded ? '0 10px 24px 12px' : '0 6px 24px 6px',
+        padding: isExpanded ? '0 8px 24px 8px' : '0 6px 24px 6px',
         gap: 0,
         zIndex: 50,
-        transition: 'width 0.24s cubic-bezier(0.16, 1, 0.3, 1), padding 0.24s ease, box-shadow 0.24s ease',
+        transition: 'width 0.22s cubic-bezier(0.16, 1, 0.3, 1), padding 0.22s ease, box-shadow 0.22s ease',
       }}
     >
-      {/* Brand & Pin */}
+      {/* ── Brand & Pin ─────────────────────────────────────────── */}
       <div style={{
-        padding: isExpanded ? '20px 10px 16px' : '18px 0 14px',
-        borderBottom: '1px solid rgba(255,220,170,0.08)',
-        marginBottom: 14,
+        padding: isExpanded ? '16px 8px 14px' : '14px 0 12px',
+        borderBottom: '1px solid rgba(255,220,170,0.07)',
+        marginBottom: 12,
         position: 'sticky',
         top: 0,
-        background: '#2e1a0c',
+        background: 'linear-gradient(180deg, #261608 80%, transparent 100%)',
         zIndex: 10,
         display: 'flex',
         flexDirection: 'column',
         alignItems: isExpanded ? 'flex-start' : 'center',
-        transition: 'all 0.24s ease',
+        transition: 'all 0.22s ease',
       }}>
         <div style={{
           display: 'flex',
@@ -195,22 +207,22 @@ export default function Sidebar({ active, onNavigate }: Props) {
           {isExpanded ? (
             <div style={{
               fontFamily: "var(--font-display, 'Fraunces', Georgia, serif)",
-              fontSize: 24,
-              fontWeight: 700,
+              fontSize: 20,
+              fontWeight: 600,
               color: '#fdf8f2',
-              letterSpacing: '-0.3px',
-              lineHeight: 1.1,
+              letterSpacing: '-0.4px',
+              lineHeight: 1.15,
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
+              gap: 9,
               whiteSpace: 'nowrap',
             }}>
-              <span>Teacher</span>
-              <TeacherLogo size={30} variant="badge" rounded={8} />
+              <TeacherLogo size={28} variant="badge" rounded={7} />
+              <span>Teacher AI</span>
             </div>
           ) : (
-            <div title="Teacher AI">
-              <TeacherLogo size={44} variant="badge" rounded={12} />
+            <div title="Teacher AI" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+              <TeacherLogo size={38} variant="badge" rounded={10} />
             </div>
           )}
 
@@ -219,53 +231,59 @@ export default function Sidebar({ active, onNavigate }: Props) {
               onClick={togglePin}
               title={isPinned ? 'Desafixar menu' : 'Fixar menu'}
               style={{
-                background: isPinned ? 'rgba(196,131,74,0.18)' : 'transparent',
-                border: isPinned
-                  ? '1px solid rgba(196,131,74,0.35)'
-                  : '1px solid rgba(255,255,255,0.08)',
-                color: isPinned ? '#c4834a' : 'rgba(196,160,120,0.5)',
-                borderRadius: RADIUS.md,
-                padding: '5px 8px',
+                background: isPinned ? 'rgba(196,131,74,0.15)' : 'transparent',
+                border: '1px solid ' + (isPinned ? 'rgba(196,131,74,0.3)' : 'rgba(255,255,255,0.07)'),
+                color: isPinned ? '#c4834a' : 'rgba(196,160,120,0.4)',
+                borderRadius: 8,
+                padding: '4px 7px',
                 cursor: 'pointer',
-                fontSize: 13,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 5,
+                gap: 4,
                 transition: 'all 0.15s ease',
+                flexShrink: 0,
               }}
             >
-              <i className={isPinned ? 'ti ti-pinned' : 'ti ti-pin'} style={{ fontSize: 14 }} />
-              <span style={{ fontSize: 11, fontWeight: 600 }}>{isPinned ? 'Fixada' : 'Auto'}</span>
+              <Icon
+                name={isPinned ? 'pin-off' : 'pin'}
+                size={12}
+                strokeWidth={2}
+                color={isPinned ? '#c4834a' : 'rgba(196,160,120,0.45)'}
+              />
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.4px' }}>
+                {isPinned ? 'FIXADA' : 'AUTO'}
+              </span>
             </button>
           )}
         </div>
 
         {isExpanded && (
           <div style={{
-            fontSize: 11,
-            color: 'rgba(196,160,120,0.5)',
-            marginTop: 6,
+            fontSize: 10,
+            color: 'rgba(196,160,120,0.38)',
+            marginTop: 5,
             fontWeight: 600,
-            letterSpacing: '1.5px',
+            letterSpacing: '1.8px',
             textTransform: 'uppercase',
             fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
             whiteSpace: 'nowrap',
+            paddingLeft: 37,
           }}>
             Assistente Pedagógico
           </div>
         )}
       </div>
 
-      {/* Seletor de Modo de Trabalho (Adaptive Workspaces) */}
+      {/* ── Workspace mode filter ────────────────────────────────── */}
       {isExpanded && (
         <div style={{
           display: 'flex',
-          gap: 4,
-          padding: '4px 14px 10px',
+          gap: 3,
+          padding: '2px 4px 10px',
           overflowX: 'auto',
           scrollbarWidth: 'none',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          marginBottom: 6,
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          marginBottom: 8,
         }}>
           {WORKSPACE_TABS.map(tab => {
             const isTabActive = workspaceMode === tab.mode
@@ -275,13 +293,14 @@ export default function Sidebar({ active, onNavigate }: Props) {
                 onClick={() => handleSetWorkspaceMode(tab.mode)}
                 title={tab.label}
                 style={{
-                  background: isTabActive ? '#8b5e3c' : 'rgba(255,255,255,0.05)',
-                  color: isTabActive ? '#fff' : 'rgba(196,160,120,0.7)',
-                  border: isTabActive ? '1px solid rgba(196,131,74,0.5)' : '1px solid rgba(255,255,255,0.06)',
-                  borderRadius: 14,
-                  padding: '4px 8px',
-                  fontSize: 11,
-                  fontWeight: 600,
+                  background: isTabActive ? 'rgba(139,94,60,0.9)' : 'rgba(255,255,255,0.04)',
+                  color: isTabActive ? '#fdf8f2' : 'rgba(196,160,120,0.55)',
+                  border: '1px solid ' + (isTabActive ? 'rgba(196,131,74,0.4)' : 'rgba(255,255,255,0.05)'),
+                  borderRadius: 12,
+                  padding: '3px 8px',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.2px',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                   display: 'flex',
@@ -290,7 +309,7 @@ export default function Sidebar({ active, onNavigate }: Props) {
                   transition: 'all 0.15s ease',
                 }}
               >
-                <i className={`ti ${tab.icon}`} style={{ fontSize: 11 }} />
+                <Icon name={tab.icon} size={10} strokeWidth={2} />
                 <span>{tab.label}</span>
               </button>
             )
@@ -298,13 +317,13 @@ export default function Sidebar({ active, onNavigate }: Props) {
         </div>
       )}
 
-      {/* Nav sections */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* ── Nav sections ────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
         {filteredNav.map((section) => {
           const isSectionOpen = !section.label || !!openSections[section.label]
 
           return (
-            <div key={section.label || 'inicio'} style={{ marginBottom: section.label ? 4 : 0 }}>
+            <div key={section.label || 'inicio'} style={{ marginBottom: section.label ? 2 : 0 }}>
               {section.label && isExpanded && (
                 <button
                   type="button"
@@ -314,58 +333,53 @@ export default function Sidebar({ active, onNavigate }: Props) {
                     background: 'transparent',
                     border: 'none',
                     cursor: 'pointer',
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: 700,
                     textTransform: 'uppercase',
-                    letterSpacing: '1.8px',
-                    color: isSectionOpen ? 'rgba(196,160,120,0.85)' : 'rgba(196,160,120,0.45)',
-                    padding: '10px 10px 6px',
+                    letterSpacing: '1.6px',
+                    color: isSectionOpen ? 'rgba(196,160,120,0.7)' : 'rgba(196,160,120,0.35)',
+                    padding: '10px 8px 5px',
                     fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
                     whiteSpace: 'nowrap',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    borderRadius: RADIUS.md,
+                    borderRadius: 7,
                     transition: 'all 0.15s ease',
                     textAlign: 'left',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.color = 'rgba(253,248,242,0.95)'
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                    e.currentTarget.style.color = 'rgba(253,248,242,0.8)'
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.color = isSectionOpen ? 'rgba(196,160,120,0.85)' : 'rgba(196,160,120,0.45)'
-                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.color = isSectionOpen ? 'rgba(196,160,120,0.7)' : 'rgba(196,160,120,0.35)'
                   }}
                 >
-                  <span style={{ fontSize: 13, opacity: 0.85 }}>
-                    {section.label === 'Organização' ? '🏢' :
-                     section.label === 'Área do Professor' ? '👨‍🏫' :
-                     section.label === 'Criação' ? '✨' :
-                     section.label === 'Em Sala de Aula' ? '🎓' :
-                     section.label === 'Alunos & Avaliação' ? '📊' :
-                     section.label === 'Comunicação' ? '💬' :
-                     section.label === 'Configurações' ? '⚙️' : ''}
-                  </span>
+                  {SECTION_ICONS[section.label] && (
+                    <Icon
+                      name={SECTION_ICONS[section.label]}
+                      size={11}
+                      strokeWidth={2}
+                      color="currentColor"
+                    />
+                  )}
                   <span style={{ flex: 1 }}>{section.label}</span>
-                  <i
-                    className={`ti ${isSectionOpen ? 'ti-chevron-down' : 'ti-chevron-right'}`}
-                    style={{
-                      fontSize: 11,
-                      opacity: 0.7,
-                      transition: 'transform 0.2s ease',
-                    }}
+                  <Icon
+                    name={isSectionOpen ? 'chevron-down' : 'chevron-right'}
+                    size={10}
+                    strokeWidth={2.5}
+                    color="currentColor"
+                    style={{ opacity: 0.6 }}
                   />
                 </button>
               )}
 
-              {/* Funcionalidades da seção (visíveis quando aberta ou quando a barra estiver contraída em ícones) */}
               {(isSectionOpen || !isExpanded) && (
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 2,
-                  marginTop: section.label && isExpanded ? 2 : 0,
+                  gap: 1,
+                  marginTop: section.label && isExpanded ? 1 : 0,
                 }}>
                   {section.items.map((item) => {
                     const isActive = active === item.key
@@ -386,19 +400,29 @@ export default function Sidebar({ active, onNavigate }: Props) {
         })}
       </div>
 
-      {/* Footer */}
+      {/* ── Footer ──────────────────────────────────────────────── */}
       {isExpanded && (
         <div style={{
-          marginTop: 14,
-          padding: '12px 10px 0',
-          borderTop: '1px solid rgba(255,220,170,0.07)',
+          marginTop: 12,
+          padding: '10px 8px 0',
+          borderTop: '1px solid rgba(255,220,170,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
         }}>
           <div style={{
-            fontSize: 11,
-            color: 'rgba(196,160,120,0.4)',
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: '#4ade80',
+            flexShrink: 0,
+          }} />
+          <div style={{
+            fontSize: 10,
+            color: 'rgba(196,160,120,0.35)',
             letterSpacing: '0.4px',
             fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
-            fontWeight: 500,
+            fontWeight: 600,
             whiteSpace: 'nowrap',
           }}>
             TeacherAI v2.0
@@ -415,60 +439,69 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
   isExpanded: boolean
   onNavigate: (k: ModuleKey) => void
 }) {
-  const [showTooltip, setShowTooltip] = useState(false)
+  const [isHov, setIsHov] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
 
   return (
     <div style={{ position: 'relative' }}>
       <button
+        ref={btnRef}
         onClick={() => onNavigate(item.key)}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
+        onMouseEnter={() => setIsHov(true)}
+        onMouseLeave={() => setIsHov(false)}
         title={!isExpanded ? item.label : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: isExpanded ? 'flex-start' : 'center',
-          gap: isExpanded ? 12 : 0,
+          gap: isExpanded ? 10 : 0,
           width: '100%',
-          padding: isExpanded ? '10px 14px' : '10px 0',
-          borderRadius: RADIUS.md,
+          padding: isExpanded ? '8px 10px 8px 9px' : '9px 0',
+          borderRadius: 9,
           border: 'none',
+          // Estado ativo: fundo quente + borda esquerda dourada
           background: isActive
-            ? 'rgba(253,248,242,0.12)'
-            : 'transparent',
-          color: isActive ? '#fdf8f2' : 'rgba(196,160,120,0.7)',
-          fontSize: 15,
-          fontWeight: isActive ? 700 : 500,
+            ? 'rgba(196,131,74,0.14)'
+            : isHov
+              ? 'rgba(255,255,255,0.05)'
+              : 'transparent',
+          color: isActive ? '#fdf8f2' : isHov ? 'rgba(253,248,242,0.85)' : 'rgba(196,160,120,0.6)',
+          fontSize: 13.5,
+          fontWeight: isActive ? 600 : 400,
           cursor: 'pointer',
           textAlign: 'left',
-          transition: 'all 0.15s ease',
-          borderLeft: isExpanded && isActive
-            ? '3px solid rgba(196,131,74,0.75)'
-            : '3px solid transparent',
-          marginBottom: 3,
+          transition: 'all 0.14s ease',
+          // Borda esquerda: strip de acento dourado só quando ativo
+          boxShadow: isExpanded && isActive
+            ? 'inset 2px 0 0 #c4834a'
+            : 'none',
+          marginBottom: 0,
           lineHeight: 1.3,
           fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
+          letterSpacing: isActive ? '-0.1px' : '0',
         }}
       >
-        {/* Icon Container (+40% scale) */}
+        {/* Icon wrapper */}
         <div style={{
-          width: 34,
-          height: 34,
-          borderRadius: RADIUS.md,
+          width: 30,
+          height: 30,
+          borderRadius: 8,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: isActive ? 'rgba(196,131,74,0.18)' : 'transparent',
-          transition: 'background 0.15s ease',
+          background: isActive
+            ? 'rgba(196,131,74,0.2)'
+            : isHov
+              ? 'rgba(255,255,255,0.06)'
+              : 'transparent',
+          transition: 'background 0.14s ease',
           flexShrink: 0,
         }}>
-          <i
-            className={`ti ${item.icon}`}
-            style={{
-              fontSize: 21,
-              color: isActive ? '#c4834a' : 'rgba(196,131,74,0.65)',
-              lineHeight: 1,
-            }}
+          <Icon
+            name={item.icon}
+            size={16}
+            strokeWidth={isActive ? 2 : 1.5}
+            color={isActive ? '#d4914e' : isHov ? 'rgba(196,160,120,0.9)' : 'rgba(196,131,74,0.55)'}
           />
         </div>
 
@@ -482,27 +515,54 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
             {item.label}
           </span>
         )}
+
+        {/* Dot indicator (collapsed mode — active) */}
+        {!isExpanded && isActive && (
+          <div style={{
+            position: 'absolute',
+            right: 4,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 3,
+            height: 14,
+            borderRadius: 2,
+            background: '#c4834a',
+          }} />
+        )}
       </button>
 
-      {/* Tooltip when collapsed */}
-      {!isExpanded && showTooltip && (
+      {/* Tooltip (collapsed only) */}
+      {!isExpanded && isHov && (
         <div style={{
           position: 'fixed',
-          left: 88,
-          transform: 'translateY(-34px)',
+          left: 72,
+          transform: 'translateY(-50%) translateY(-2px)',
           background: '#1c110a',
           color: '#fdf8f2',
-          padding: '6px 12px',
-          borderRadius: RADIUS.md,
-          fontSize: TEXT.body,
-          fontWeight: 600,
+          padding: '5px 11px',
+          borderRadius: 8,
+          fontSize: 12.5,
+          fontWeight: 500,
           whiteSpace: 'nowrap',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+          border: '1px solid rgba(255,220,170,0.1)',
           zIndex: 9999,
           pointerEvents: 'none',
+          fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
         }}>
           {item.label}
+          {/* Arrow */}
+          <div style={{
+            position: 'absolute',
+            left: -4,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 0,
+            height: 0,
+            borderTop: '4px solid transparent',
+            borderBottom: '4px solid transparent',
+            borderRight: '4px solid rgba(255,220,170,0.1)',
+          }} />
         </div>
       )}
     </div>
