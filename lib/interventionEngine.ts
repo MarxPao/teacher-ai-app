@@ -6,11 +6,10 @@
  *
  * Integração:
  *  - Lê métricas de "teacher_student_metrics" (localStorage)
- *  - Usa catEngine.getCatState() para theta de habilidade
+ *  - Theta IRT derivado de compositeScore (catEngine stateless; sem getCatState)
  *  - Gera InterventionPlan[] consumível pelos componentes Students.tsx e Dashboard.tsx
  */
 
-import { getCatState } from './catEngine'
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 export type PerfBand = 'critical' | 'developing' | 'proficient' | 'advanced'
@@ -206,7 +205,6 @@ export function generateInterventionPlan(
   const classAvgScore = students.reduce((a, s) => a + s.compositeScore, 0) / students.length
 
   const bandInfos: StudentBandInfo[] = students.map(s => {
-    const cat  = getCatState(s.id)
     const band = classifyBand(s.compositeScore)
     // métricas abaixo da média da turma (e abaixo de 6.5 absolutamente)
     const weakMetrics = metricKeys.filter(k => {
@@ -218,7 +216,10 @@ export function generateInterventionPlan(
       name:        s.name,
       band,
       score:       s.compositeScore,
-      theta:       cat.theta,
+      // theta derivado de score (catEngine stateless; sessoes nao persistidas)
+      theta:       typeof (s as Record<string, unknown>).theta === 'number'
+                     ? (s as Record<string, unknown>).theta as number
+                     : (s.compositeScore - 5) / 2.5,  // escala [-2,+2] para score [0,10]
       weakMetrics: weakMetrics.map(k => METRIC_LABELS[k] || k),
     }
   })

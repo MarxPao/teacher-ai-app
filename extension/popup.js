@@ -3,13 +3,13 @@
  *
  * Conecta-se automaticamente:
  * 1. Tenta porta 3000 (Teacher AI Web App, que ja esta aberto no navegador)
- * 2. Tenta porta 7779 (Sidecar Python em background, se ativo)
  * O professor NUNCA precisa abrir terminal ou saber de portas!
  */
 
+// Gap 2: sidecar Python (porta 7779) aposentado — comunicacao via desktop/mcp/server.ts
+// Endpoint 7779 removido por seguranca (LGPD): nao expor servicos locais sem autenticacao
 const ENDPOINTS = [
-  'http://localhost:3000/api/skills/record',
-  'http://localhost:7779/record'
+  'http://localhost:3000/api/skills/record'
 ]
 
 const PORTAL_ID = 'machado_sobrinho'

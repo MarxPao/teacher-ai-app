@@ -616,6 +616,10 @@ function setupIpcHandlers() {
       return { v: 1, id: 'err', success: false, error: { code: 'E_METHOD_NOT_ALLOWED', message: `Método ${method} não autorizado.` } }
     }
 
+
+  // Gap 3: Supervisor -- iniciar health check e auto-start apos initCore()
+  startHealthCheck()
+  if (app.isPackaged) configureAutoStart(true)
     const schema = (MethodParamSchemas as any)[method]
     if (schema) {
       const parsed = schema.safeParse(params || {})
@@ -625,6 +629,10 @@ function setupIpcHandlers() {
           id: 'err',
           success: false,
           error: { code: 'E_VALIDATION_FAILED', message: 'Parâmetros inválidos.', details: parsed.error.format() },
+
+app.on('before-quit', () => {
+  stopHealthCheck()
+})
         }
       }
     }
@@ -641,6 +649,33 @@ function setupIpcHandlers() {
       }
     }
   })
+
+  // -- Gap 4: Protocol Versioning -- handlers injetados em setupIpcHandlers()
+  ipcMain.handle('protocol:handshake', async (_event, req: import('../contracts/protocol').HandshakeRequest) => {
+    const { validateHandshake, buildHandshakeAck } = await import('../contracts/protocol')
+    const rejection = validateHandshake(req)
+    if (rejection) {
+      return { v: 1, id: 'handshake', success: false, result: rejection }
+    }
+    const sessionToken = require('crypto').randomBytes(24).toString('hex')
+    return { v: 1, id: 'handshake', success: true, result: buildHandshakeAck(sessionToken) }
+  })
+
+  ipcMain.handle('protocol:version', () => ({
+    PROTOCOL_VERSION: '2.0.0', MIN_EXTENSION_VERSION: '0.1.0'
+  }))
+
+  // -- Gap 3: Supervisor IPC -- handlers injetados em setupIpcHandlers()
+  ipcMain.handle('supervisor:set-auto-start', (_event: Electron.IpcMainInvokeEvent, enable: boolean) => {
+    configureAutoStart(enable)
+    return { success: true, enabled: enable }
+  })
+
+  ipcMain.handle('supervisor:status', () => ({
+    degradedMode,
+    consecutiveFailures,
+    autoStart: app.isPackaged ? app.getLoginItemSettings().openAtLogin : false,
+  }))
 }
 
 
@@ -761,36 +796,3 @@ ipcMain.handle('supervisor:status', () => {
   }
 })
 
-// Iniciar health check quando app estiver pronto (chamado após initCore())
-app.whenReady().then(() => {
-  startHealthCheck()
-  // Configurar auto-start padrão: habilitado em produção
-  configureAutoStart(true)
-})
-
-app.on('before-quit', () => {
-  stopHealthCheck()
-})
-
-
-// ── Gap 4: Protocol Versioning — handshake IPC handler ──
-// Importado dinamicamente para evitar circular (contracts é um módulo TS puro)
-ipcMain.handle('protocol:handshake', async (_event, req: import('../contracts/protocol').HandshakeRequest) => {
-  const { validateHandshake, buildHandshakeAck, PROTOCOL_VERSION, MIN_DESKTOP_VERSION } = await import('../contracts/protocol')
-  const rejection = validateHandshake(req)
-  if (rejection) {
-    return { v: 1, id: 'handshake', success: false, result: rejection }
-  }
-  // Emitir token de sessão para esta conexão
-  const sessionToken = crypto.randomBytes(24).toString('hex')
-  return {
-    v: 1,
-    id: 'handshake',
-    success: true,
-    result: buildHandshakeAck(sessionToken),
-  }
-})
-
-ipcMain.handle('protocol:version', () => {
-  return { PROTOCOL_VERSION: '2.0.0', MIN_EXTENSION_VERSION: '0.1.0' }
-})

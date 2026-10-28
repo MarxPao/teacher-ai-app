@@ -17,7 +17,6 @@
  */
 
 import { recordErasure } from './auditGate'
-import { eraseStudentResponses } from './catEngine'
 
 export interface ErasureReport {
   studentId: string
@@ -95,9 +94,22 @@ export function eraseStudentData(studentId: string): ErasureReport {
       }
     }
 
-    // 6. Respostas do CAT engine (catEngine.ts)
-    const catErased = eraseStudentResponses(studentId)
-    if (catErased > 0) report.keysAffected.push('teacher_cat_responses')
+    // 6. Respostas do CAT engine — limpa filtrado por studentId no localStorage
+    //    (catEngine.ts é stateless; teacher_cat_responses é persistido diretamente)
+    try {
+      const catRaw = localStorage.getItem('teacher_cat_responses')
+      if (catRaw) {
+        const catAll = JSON.parse(catRaw)
+        const catFiltered = Array.isArray(catAll)
+          ? catAll.filter((r: Record<string, unknown>) => r.studentId !== studentId && r.id !== studentId)
+          : catAll
+        const catRemoved = Array.isArray(catAll) ? catAll.length - catFiltered.length : 0
+        if (catRemoved > 0) {
+          localStorage.setItem('teacher_cat_responses', JSON.stringify(catFiltered))
+          report.keysAffected.push('teacher_cat_responses')
+        }
+      }
+    } catch { /* localStorage indisponível (SSR/Node) */ }
 
     report.success = true
   } catch (e: unknown) {
