@@ -1,8 +1,8 @@
-/**
+﻿/**
  * @deprecated Módulo legado de sincronização Supabase na nuvem.
  * O aplicativo opera sob o paradigma local-first (Fase 6) com SQLite cifrado no Desktop.
  * supabaseClient.ts — Conexão com Supabase para Cloud Sync em tempo real
- * Utiliza preferencialmente a service_role key ou anonKey para acesso garantido.
+ * Utiliza apenas anonKey para acesso (Gap 2: service_role key removida — viola princípio de menor privilégio).
  */
 
 export interface SupabaseConfig {
@@ -38,7 +38,8 @@ function getActiveKey(cfg: SupabaseConfig): string {
   if (typeof window !== 'undefined') {
     return cfg.anonKey || ''
   }
-  return cfg.serviceKey || cfg.anonKey || ''
+  // Gap 2: serviceKey removido — usar apenas anonKey (LGPD / menor privilégio)
+  return cfg.anonKey || ''
 }
 
 /**
@@ -2008,7 +2009,7 @@ export async function deleteDidacticSequenceFromSupabase(id: string): Promise<bo
 
 export function isSupabaseConfigured(): boolean {
   const cfg = getSupabaseConfig()
-  return !!(cfg?.url && (cfg.anonKey || cfg.serviceKey))
+  return !!(cfg?.url && cfg.anonKey)
 }
 
 export async function fetchStudentsFromSupabase(): Promise<Array<{

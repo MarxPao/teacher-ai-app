@@ -1,4 +1,4 @@
-"""
+﻿"""
 sidecar/supabase_memory_client.py — Cliente de Memória Local-First para Pathways e Auto-Desenvolvimento
 
 Gerencia a persistência e consulta de:
@@ -54,7 +54,8 @@ class SupabaseMemoryClient:
 
     def __init__(self):
         self.supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").rstrip("/")
-        self.supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+        # Gap 2: SERVICE_ROLE_KEY removido — usar apenas ANON_KEY (LGPD / princípio de menor privilégio)
+        self.supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
         self.rest_endpoint = f"{self.supabase_url}/rest/v1" if self.supabase_url else ""
         self._init_local_caches()
 

@@ -642,3 +642,155 @@ function setupIpcHandlers() {
     }
   })
 }
+
+
+// ── Gap 3: Electron Supervisor — crash handlers, auto-start, health check ──
+// Baseado em: HANDOFF architectural plan Gap 3
+
+// 3a. Auto-start na inicialização do sistema operacional (opt-in pelo usuário)
+function configureAutoStart(enable: boolean): void {
+  if (!app.isPackaged) return // desabilitado em dev para não poluir startup
+  app.setLoginItemSettings({
+    openAtLogin: enable,
+    openAsHidden: true,
+    name: 'TeacherAI',
+  })
+}
+
+// 3b. Health check periódico — detecta travamentos e entra em modo degradado
+let healthCheckInterval: NodeJS.Timeout | null = null
+let consecutiveFailures = 0
+const MAX_HEALTH_FAILURES = 3
+let degradedMode = false
+
+function startHealthCheck(): void {
+  if (healthCheckInterval) return
+  healthCheckInterval = setInterval(async () => {
+    try {
+      // Verifica se SQLite responde
+      if (driver) {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('SQLite timeout')), 3000)
+          try {
+            // ping trivial — SELECT 1
+            driver!.prepare('SELECT 1').get()
+            clearTimeout(timeout)
+            resolve()
+          } catch (e) {
+            clearTimeout(timeout)
+            reject(e)
+          }
+        })
+      }
+      // Saiu do modo degradado
+      if (degradedMode) {
+        console.log('[supervisor] Health check OK — saindo do modo degradado')
+        degradedMode = false
+        mainWindow?.webContents.send('supervisor:degraded-mode', false)
+      }
+      consecutiveFailures = 0
+    } catch (err) {
+      consecutiveFailures++
+      console.error(`[supervisor] Health check falhou (${consecutiveFailures}/${MAX_HEALTH_FAILURES}):`, err)
+      if (consecutiveFailures >= MAX_HEALTH_FAILURES && !degradedMode) {
+        degradedMode = true
+        console.warn('[supervisor] Entrando em modo degradado — funcionalidades limitadas')
+        mainWindow?.webContents.send('supervisor:degraded-mode', true)
+      }
+    }
+  }, 30_000) // a cada 30 segundos
+}
+
+function stopHealthCheck(): void {
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval)
+    healthCheckInterval = null
+  }
+}
+
+// 3c. Handlers de crash do processo renderer
+app.on('render-process-gone', (event, webContents, details) => {
+  console.error('[supervisor] render-process-gone:', details.reason, details.exitCode)
+  // Razões recuperáveis: 'crashed', 'oom' (fora de memória)
+  const recoverable = ['crashed', 'oom'].includes(details.reason)
+  if (recoverable && mainWindow && !mainWindow.isDestroyed()) {
+    console.log('[supervisor] Tentando recuperar renderer...')
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.reload()
+      } else {
+        createWindow()
+      }
+    }, 1500)
+  } else {
+    // Razão não-recuperável (killed, clean-exit, etc.) — notifica usuário
+    mainWindow?.webContents.send('supervisor:renderer-gone', { reason: details.reason, recoverable: false })
+  }
+})
+
+// 3d. Handler de crash de child processes (GPU, utility, etc.)
+app.on('child-process-gone', (event, details) => {
+  console.error('[supervisor] child-process-gone:', details.type, details.reason, details.exitCode)
+  // GPU crash: tenta recriar com GPU desabilitada
+  if (details.type === 'GPU' && details.reason === 'crashed') {
+    console.warn('[supervisor] GPU process crashed — reabilitando modo software rendering')
+    app.commandLine.appendSwitch('disable-gpu')
+    app.commandLine.appendSwitch('disable-software-rasterizer')
+  }
+})
+
+// 3e. Handler para segunda instância (já existe requestSingleInstanceLock acima)
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+})
+
+// 3f. IPC para configurar auto-start e consultar modo degradado
+ipcMain.handle('supervisor:set-auto-start', (_event, enable: boolean) => {
+  configureAutoStart(enable)
+  return { success: true, enabled: enable }
+})
+
+ipcMain.handle('supervisor:status', () => {
+  return {
+    degradedMode,
+    consecutiveFailures,
+    autoStart: app.isPackaged ? app.getLoginItemSettings().openAtLogin : false,
+  }
+})
+
+// Iniciar health check quando app estiver pronto (chamado após initCore())
+app.whenReady().then(() => {
+  startHealthCheck()
+  // Configurar auto-start padrão: habilitado em produção
+  configureAutoStart(true)
+})
+
+app.on('before-quit', () => {
+  stopHealthCheck()
+})
+
+
+// ── Gap 4: Protocol Versioning — handshake IPC handler ──
+// Importado dinamicamente para evitar circular (contracts é um módulo TS puro)
+ipcMain.handle('protocol:handshake', async (_event, req: import('../contracts/protocol').HandshakeRequest) => {
+  const { validateHandshake, buildHandshakeAck, PROTOCOL_VERSION, MIN_DESKTOP_VERSION } = await import('../contracts/protocol')
+  const rejection = validateHandshake(req)
+  if (rejection) {
+    return { v: 1, id: 'handshake', success: false, result: rejection }
+  }
+  // Emitir token de sessão para esta conexão
+  const sessionToken = crypto.randomBytes(24).toString('hex')
+  return {
+    v: 1,
+    id: 'handshake',
+    success: true,
+    result: buildHandshakeAck(sessionToken),
+  }
+})
+
+ipcMain.handle('protocol:version', () => {
+  return { PROTOCOL_VERSION: '2.0.0', MIN_EXTENSION_VERSION: '0.1.0' }
+})

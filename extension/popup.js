@@ -109,3 +109,46 @@ async function stopRecording() {
     }
   )
 }
+
+// ── Gap 13: Dynamic Permissions — verificar acesso ao portal atual ──
+// Executado quando o popup abre para detectar se a aba precisa de permissão nova.
+;(async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('about:')) return
+
+    // Verificar se já temos acesso
+    const hasAccess = await new Promise(resolve =>
+      chrome.permissions.contains({ origins: [new URL(tab.url).origin + '/*'] }, resolve)
+    )
+    if (hasAccess) return
+
+    // Criar banner de solicitação de permissão
+    const banner = document.createElement('div')
+    banner.id = 'permission-banner'
+    banner.style.cssText = 'background:#fef3c7;border:1px solid #d97706;border-radius:6px;padding:10px;margin:8px 0;font-size:12px;'
+    banner.innerHTML = `
+      <p style="margin:0 0 6px;font-weight:600;color:#92400e;">Portal não autorizado</p>
+      <p style="margin:0 0 8px;color:#78350f;">Para gravar nesta página, conceda acesso ao Teacher AI.</p>
+      <button id="btn-grant-permission" style="background:#d97706;color:white;border:none;border-radius:4px;padding:6px 12px;cursor:pointer;font-size:12px;width:100%;">
+        Conceder acesso a este portal
+      </button>
+    `
+    document.body.insertBefore(banner, document.body.firstChild)
+
+    document.getElementById('btn-grant-permission')?.addEventListener('click', async () => {
+      const pattern = new URL(tab.url).origin + '/*'
+      const granted = await new Promise(resolve =>
+        chrome.permissions.request({ origins: [pattern] }, resolve)
+      )
+      if (granted) {
+        banner.innerHTML = '<p style="color:#065f46;font-weight:600;margin:0;">✓ Acesso concedido!</p>'
+        setTimeout(() => banner.remove(), 2000)
+      } else {
+        banner.querySelector('p:last-of-type').textContent = 'Permissão negada. Tente novamente.'
+      }
+    })
+  } catch (e) {
+    console.debug('[popup] Erro ao verificar permissões:', e.message)
+  }
+})()
