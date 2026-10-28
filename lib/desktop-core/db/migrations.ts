@@ -191,6 +191,37 @@ CREATE TABLE IF NOT EXISTS community_quarantine_events (
 CREATE INDEX IF NOT EXISTS idx_comm_events_pkg ON community_quarantine_events(package_id, map_version);
 `
 
+
+export const MCP_SCHEMA_SQL = `
+-- assessment_items: itens de avaliacao para o MCP server (Gap 9)
+-- Sem PII: apenas enunciado truncado, habilidade BNCC, dificuldade e tags
+CREATE TABLE IF NOT EXISTS assessment_items (
+  id          TEXT PRIMARY KEY,
+  skill_code  TEXT NOT NULL,
+  statement   TEXT NOT NULL,
+  difficulty  REAL NOT NULL DEFAULT 0.5 CHECK(difficulty >= 0 AND difficulty <= 1),
+  tags        TEXT,             -- JSON array de strings
+  source      TEXT,             -- portal/importacao de origem (nao-PII)
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_items_skill     ON assessment_items(skill_code);
+CREATE INDEX IF NOT EXISTS idx_items_difficulty ON assessment_items(difficulty);
+
+-- class_skill_mastery: resumo agregado de dominio por turma e habilidade BNCC
+-- Dados anonimizados: nao ha identificacao individual de alunos (LGPD Art. 13 par.1)
+CREATE TABLE IF NOT EXISTS class_skill_mastery (
+  class_id      TEXT NOT NULL,
+  skill_code    TEXT NOT NULL,
+  avg_mastery   REAL NOT NULL DEFAULT 0 CHECK(avg_mastery >= 0 AND avg_mastery <= 1),
+  student_count INTEGER NOT NULL DEFAULT 0,
+  updated_at    TEXT NOT NULL,
+  PRIMARY KEY (class_id, skill_code)
+);
+CREATE INDEX IF NOT EXISTS idx_mastery_class ON class_skill_mastery(class_id);
+CREATE INDEX IF NOT EXISTS idx_mastery_skill ON class_skill_mastery(skill_code);
+`
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -201,6 +232,11 @@ export const MIGRATIONS: Migration[] = [
     version: 2,
     name: '002_community_schema',
     sql: COMMUNITY_SCHEMA_SQL,
+  },
+  {
+    version: 3,
+    name: '003_mcp_items_and_mastery',
+    sql: MCP_SCHEMA_SQL,
   },
 ]
 
