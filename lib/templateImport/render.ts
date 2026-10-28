@@ -6,6 +6,7 @@
  * quebrava a cada mudança no gerador) e os 4 cabeçalhos fixos de exportUtils.
  */
 import type { Block, RunStyle } from './ir'
+import { PTAB_MARKER } from './docxParser'
 import { paragraphText } from './ir'
 import type { HeaderCell, HeaderField, ImportedExam, ImportedItem, QuestionGroup, RoleStyle, SchoolTemplate, StyleRole } from './template'
 import { fillHeadingTemplate, formatOptionLabel, formatSubItemLabel } from './template'
@@ -38,7 +39,32 @@ const css = (s: RunStyle | undefined): string => {
   if (s.fontFamily) out.push(`font-family:${cssFont(s.fontFamily)}`)
   if (s.sizePt) out.push(`font-size:${s.sizePt}pt`)
   if (s.color) out.push(`color:#${s.color}`)
+  if (s.caps) out.push('text-transform:uppercase')
+  if (s.smallCaps) out.push('font-variant:small-caps')
+  if (s.vertAlign) {
+    // Word reduz o sobrescrito/subscrito para cerca de 2/3 do tamanho
+    out.push(`vertical-align:${s.vertAlign === 'superscript' ? 'super' : 'sub'}`, `font-size:${((s.sizePt || 11) * 0.66).toFixed(2)}pt`)
+  }
+  if (s.highlight) out.push(`background-color:${HIGHLIGHT[s.highlight] || '#FFFF00'}`)
   return out.join(';')
+}
+
+const HIGHLIGHT: Record<string, string> = {
+  yellow: '#FFFF00', green: '#00FF00', cyan: '#00FFFF', magenta: '#FF00FF', blue: '#0000FF',
+  red: '#FF0000', darkBlue: '#000080', darkCyan: '#008080', darkGreen: '#008000', darkMagenta: '#800080',
+  darkRed: '#800000', darkYellow: '#808000', darkGray: '#808080', lightGray: '#C0C0C0', black: '#000000',
+}
+
+/**
+ * Altura de uma linha "simples" do Word em relação ao tamanho da fonte.
+ * Calibri/Aptos (e Carlito/Liberation nas métricas) ocupam ~1,22 em; Arial/Times ~1,15.
+ */
+export function lineFactor(font?: string): number {
+  const f = (font || '').toLowerCase()
+  if (/calibri|aptos|carlito/.test(f)) return 1.22
+  if (/cambria|caladea/.test(f)) return 1.17
+  if (/arial|helvetica|times|liberation/.test(f)) return 1.15
+  return 1.2
 }
 
 /** CSS completo de um papel: fonte, peso, tamanho, espaçamento, recuo e alinhamento do modelo */
@@ -51,7 +77,7 @@ export function roleCss(tpl: SchoolTemplate, role: StyleRole, opts: { block?: bo
     if (r.align) out.push(`text-align:${r.align}`)
     if (r.spaceBeforePt !== undefined) out.push(`margin-top:${r.spaceBeforePt}pt`)
     if (r.spaceAfterPt !== undefined) out.push(`margin-bottom:${r.spaceAfterPt}pt`)
-    if (r.lineMultiple) out.push(`line-height:${Math.max(1, r.lineMultiple * 1.15).toFixed(2)}`)
+    if (r.lineMultiple) out.push(`line-height:${(r.lineMultiple * lineFactor(r.fontFamily)).toFixed(3)}`)
     else if (r.linePt) out.push(`line-height:${r.linePt}pt`)
     if (r.indentMm) out.push(`padding-left:${r.indentMm}mm`)
     if (r.firstLineMm) out.push(`text-indent:${r.firstLineMm}mm`)
@@ -78,7 +104,7 @@ export function cssFont(name: string): string {
 /** Altura de linha do corpo no padrão do modelo */
 function bodyLineHeight(tpl: SchoolTemplate): string {
   const b = tpl.roles?.body
-  if (b?.lineMultiple) return (b.lineMultiple * 1.15).toFixed(2)
+  if (b?.lineMultiple) return (b.lineMultiple * lineFactor(b.fontFamily)).toFixed(3)
   if (b?.linePt) return `${b.linePt}pt`
   return String(tpl.body.lineHeight || 1.35)
 }
@@ -105,7 +131,12 @@ ${S('.q-heading.boxed')} { display:inline-block; border:1px solid #000; border-r
 ${S('.q ol, .q ul')} { margin:4px 0; padding-left:0; list-style:none; }
 ${S('.q li')} { margin:3px 0 3px 1.4em; text-indent:-1.4em; }
 ${S('.line')} { border-bottom:1px solid #000; height:1.9em; }
-${tpl.page.columns === 2 ? `${S('.tpl-body')} { column-count:2; column-gap:7mm; column-rule:1px solid #999; }` : ''}`
+${tpl.page.columns === 2 ? `${S('.tpl-body')} { column-count:2; column-gap:7mm; column-rule:1px solid #999; }` : ''}
+${S('.ptab')} { flex:1; display:inline-block; min-width:0.5em; }
+@media print {
+  ${S('.q')} { break-inside:avoid; page-break-inside:avoid; orphans:3; widows:3; }
+  ${S('.q-heading,.q-instruction')} { break-after:avoid; page-break-after:avoid; }
+}`
 }
 
 /** Cabeçalho de página + cabeçalho da escola + instruções */
@@ -117,7 +148,7 @@ export function renderTemplateHeader(tpl: SchoolTemplate, values: HeaderValues =
     const ins = tpl.instructions
     parts.push(`<div class="${ins.boxed ? 'box' : ''} tpl-instructions">` +
       (ins.title ? `<div style="${roleCss(tpl, 'instructionsTitle') || css(ins.titleStyle) || 'font-weight:700'}">${esc(ins.title)}</div>` : '') +
-      ins.items.map((t, i) => `<div style="${roleCss(tpl, 'instructionsItem')}">${i + 1}. ${esc(t)}</div>`).join('') + `</div>`)
+      ins.items.map((t, i) => `<div style="${roleCss(tpl, 'instructionsItem')}">${esc(ins.itemLabels?.[i] || `${i + 1}.`)} ${esc(t)}</div>`).join('') + `</div>`)
   }
   return parts.join('\n')
 }
@@ -190,9 +221,16 @@ function renderField(f: HeaderField, values: HeaderValues, opts: RenderOptions):
   const label = f.label ? `<span style="${css(f.labelStyle) || 'font-weight:700'}">${esc(f.label)}</span> ` : ''
   const v = valueFor(f, values, opts)
   const blank = `<span class="blank" style="min-width:${Math.min(40, Math.max(4, Math.round((f.blankChars || 20) * 0.55)))}em"></span>`
-  const value = v ? `<span style="${css(f.valueStyle)}">${esc(v)}</span>` : (f.blank || !opts.useSampleValues ? blank : '')
+  const value = v ? `<span style="${css(f.valueStyle)}">${esc(v)}</span>` : f.rawPattern ? patternHtml(f.rawPattern) : (f.blank || !opts.useSampleValues ? blank : '')
   const suffix = f.suffix ? ` <span style="${css(f.labelStyle)}">${esc(f.suffix)}</span>` : ''
   return `<span class="field" data-slot="${f.slot}">${label}${value}${suffix}</span>`
+}
+
+/** "____/____/______" → lacunas nos lugares dos sublinhados, separadores como texto */
+function patternHtml(p: string): string {
+  return p.split(/(_+)/).map(part => /^_+$/.test(part)
+    ? `<span class="blank" style="min-width:${Math.max(2, Math.round(part.length * 0.55))}em"></span>`
+    : esc(part)).join('')
 }
 
 function valueFor(f: HeaderField, values: HeaderValues, opts: RenderOptions): string | undefined {
@@ -246,7 +284,7 @@ function renderItem(tpl: SchoolTemplate, it: ImportedItem, idx: number | null, q
   const tag = idx !== null ? 'li' : 'div'
   let html = ''
   if (it.kind === 'true_false') {
-    html = `<${tag} style="${roleCss(tpl, 'tfItem')}">${label}${esc(q.tfMarker)} ${esc(it.stem)}</${tag}>`
+    html = `<${tag} style="${roleCss(tpl, 'tfItem')}">${label}${esc(q.tfMarker)} ${richHtml(it.stem)}</${tag}>`
   } else {
     const stemRole: StyleRole = idx !== null && tpl.roles?.subItem ? 'subItem' : 'stem'
     html = `<${tag} style="${idx !== null ? roleCss(tpl, stemRole) : ''}">${it.stem ? `<div style="${idx === null ? roleCss(tpl, 'stem') : ''}">${label}${multiline(it.stem)}</div>` : ''}`
@@ -269,7 +307,35 @@ function renderItem(tpl: SchoolTemplate, it: ImportedItem, idx: number | null, q
   return html
 }
 
-const multiline = (s: string) => esc(s).replace(/\n/g, '<br>')
+const multiline = (s: string) => richHtml(s)
+
+/** Converte ⟦códigos⟧…⟦/⟧ (formatação inline do parágrafo) em <span>, escapando o texto */
+export function richHtml(s: string): string {
+  const plain = (t: string) => esc(t).replace(/\x02/g, '<span class="ptab"></span>').replace(/\n/g, '<br>')
+  let out = ''
+  let last = 0
+  let open = false
+  for (const m of s.matchAll(/⟦([^⟧]*)⟧/g)) {
+    out += plain(s.slice(last, m.index))
+    last = (m.index ?? 0) + m[0].length
+    if (open) { out += '</span>'; open = false }
+    if (m[1] !== '/') {
+      const st: RunStyle = {}
+      for (const c of m[1].split(',')) {
+        if (c === 'sup') st.vertAlign = 'superscript'
+        else if (c === 'sub') st.vertAlign = 'subscript'
+        else if (c === 'caps') st.caps = true
+        else if (c === 'sc') st.smallCaps = true
+        else if (c.startsWith('hl=')) st.highlight = c.slice(3)
+      }
+      out += `<span style="${css(st)}">`
+      open = true
+    }
+  }
+  out += plain(s.slice(last))
+  if (open) out += '</span>'
+  return out
+}
 
 // ─── Blocos copiados como estão (cabeçalho/rodapé de página do Word) ─────────
 

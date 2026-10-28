@@ -1,4 +1,4 @@
-/**
+﻿/**
  * lib/templateImport/segmenter.ts
  * DocumentIR → { SchoolTemplate (layout da escola), ImportedExam (questões editáveis) }.
  *
@@ -6,7 +6,8 @@
  * porque todos chegam aqui como DocumentIR.
  */
 import type { Block, DocumentIR, ParagraphBlock, RunStyle, TableBlock, TextRun } from './ir'
-import { dominantStyle, isMostlyBold, paragraphText } from './ir'
+import { dominantStyle, isMostlyBold, paragraphText, richText } from './ir'
+import { PTAB_MARKER } from './docxParser'
 import type {
   HeaderCell, HeaderField, HeaderLayout, ImportResult, ImportWarning, ImportedExam, ImportedItem,
   QuestionGroup, QuestionPattern, RoleStyle, SchoolTemplate, StyleRole,
@@ -17,7 +18,10 @@ import { fingerprintOf, slotForLabel, splitFields } from './template'
 
 const HEADING_RE =
   /^(QUEST[ÃA]O|Quest[ãa]o|QUESTION|Question|EXERC[ÍI]CIO|Exerc[íi]cio|EXERCISE|Exercise|ATIVIDADE|Atividade|PART|Part|PARTE|Parte|Q\.?)\s*(\d{1,3})\s*([-–—:.)]\s*)?(.*?)\s*(\(\s*(\d+(?:[.,]\d+)?)\s*(marks?|points?|pts?\.?|pontos?|pt|valor)\s*\))?\s*$/
-const TF_RE = /^\s*(\(\s*\)|\[\s*\]|\(\s{0,4}\)|_{2,4})\s*(.+)$/
+// Marcador de V/F: "( )", "[ ]" ou "____" seguido de espaço. Linha de lacuna ("__________ é...") não é V/F.
+const TF_RE = /^\s*(\(\s*\)|\[\s*\]|\(\s{0,4}\)|[☐□◻]|_{2,4}(?=\s)(?!_))\s*(.+)$/
+// Marcador de item: "1.", "a)", "•", "(a)"
+const MARK_RE = /^\s*(\d+[.)]|[•\-–]|[a-zA-Z][.)]|\([a-zA-Z0-9]\))\s*/
 const TF_LEGEND_RE = /\(\s*[TV]\s*\)\s*(or|ou|e)\s*\(\s*F\s*\)|true\s+or\s+false|verdadeiro\s+ou\s+falso|\bV\s+ou\s+F\b|\bT\s+or\s+F\b/i
 const OPTION_RE = /^\s*(\(?)([A-Ea-e])([).\]]|\s-)\s*(.*)$/
 const NUMBERED_RE = /^\s*(\d{1,2})\s*([.)]|\s-)\s+(.+)$/
@@ -29,6 +33,8 @@ const ES_WORDS = /\b(el|los|las|del|que|para|con|pregunta|lee|texto|cu[áa]l|res
 
 interface Line {
   text: string
+  /** texto com formatação inline marcada (para enunciados e passagens) */
+  rich: string
   p: ParagraphBlock
   /** veio de uma tabela 1x1 (caixa) */
   boxed: boolean
@@ -88,6 +94,7 @@ export function segmentDocument(ir: DocumentIR, fileName: string, opts: { school
     if (ln.p.type !== 'paragraph') continue
     const listLabel = ln.p.list?.label || ''
     const text = ln.text
+    const rich = ln.rich
     const full = listLabel ? `${listLabel} ${text}` : text
 
     // Linhas de resposta
@@ -111,14 +118,17 @@ export function segmentDocument(ir: DocumentIR, fileName: string, opts: { school
     const instr = text.match(INSTR_TITLE_RE)
     if (instr && !content.groups.length && !instructions) {
       const items: string[] = []
-      if (instr[3]) items.push(instr[3])
+      const itemLabels: string[] = []
+      if (instr[3]) { items.push(instr[3]); itemLabels.push('') }
       let j = i + 1
       while (j < lines.length && lines[j].p.type === 'paragraph' && !(lines[j] as any).blank) {
         const t = lines[j].text
         if (!t.trim()) { j++; continue }
-        if (HEADING_RE.test(t) || (!lines[j].p.list && !/^\s*(\d+[.)]|[•\-–])\s*/.test(t) && lines[j].boxed !== ln.boxed)) break
-        if (!lines[j].p.list && !/^\s*(\d+[.)]|[•\-–])\s*/.test(t) && items.length > 0 && !ln.boxed) break
-        items.push(t.replace(/^\s*(\d+[.)]|[•\-–])\s*/, '').trim())
+        if (HEADING_RE.test(t) || (!lines[j].p.list && !MARK_RE.test(t) && lines[j].boxed !== ln.boxed)) break
+        if (!lines[j].p.list && !MARK_RE.test(t) && items.length > 0 && !ln.boxed) break
+        // rótulo do próprio modelo ("a)", "2.", bolinha ou numeração automática do Word)
+        itemLabels.push(lines[j].p.list?.label || (t.match(MARK_RE)?.[1] ?? ''))
+        items.push(t.replace(MARK_RE, '').trim())
         j++
       }
       setRole('instructionsTitle', roleStyle(ln.p))
@@ -127,6 +137,7 @@ export function segmentDocument(ir: DocumentIR, fileName: string, opts: { school
       instructions = {
         title: text.replace(/\s*:?\s*$/, '').replace(instr[3] || '', '').trim() + ':',
         items,
+        itemLabels,
         boxed: ln.boxed,
         titleStyle: dominantStyle(ln.p),
       }
@@ -136,7 +147,9 @@ export function segmentDocument(ir: DocumentIR, fileName: string, opts: { school
 
     // Título de questão ("QUESTÃO 01", "Question 2 - ... (2,0 marks)")
     const h = text.length <= 180 ? text.match(HEADING_RE) : null
-    if (h && (h[3] || h[4] === '' || /^(QUEST|Quest|QUESTION|Question|EXERC|Exerc|EXERCISE|Exercise|ATIVIDADE|Atividade)/.test(h[1]))) {
+    // Título: tem separador ("Questão 1 - ..."), pontuação, ou é curto e sem pontuação final.
+    // Prosa como "Questão 2 refere-se ao texto abaixo." não vira questão.
+    if (h && (h[3] || h[4] === '' || h[6] || (h[4].length <= 60 && !/[.!?;,]$/.test(h[4])))) {
       if (!seen.heading) {
         seen.heading = true
         pattern.headingTemplate = buildHeadingTemplate(h)
@@ -242,8 +255,8 @@ export function segmentDocument(ir: DocumentIR, fileName: string, opts: { school
         content.title = text
         continue
       }
-      if (isIntro) { pendingIntro.push(text); setRole('questionInstruction', roleStyle(ln.p)); continue }
-      content.passages.push(text)
+      if (isIntro) { pendingIntro.push(rich); setRole('questionInstruction', roleStyle(ln.p)); continue }
+      content.passages.push(rich)
       setRole('passage', roleStyle(ln.p))
       continue
     }
@@ -252,17 +265,17 @@ export function segmentDocument(ir: DocumentIR, fileName: string, opts: { school
       // Nova seção sem título numerado ("Now decide if ... True or False")
       group = null
       item = null
-      pendingIntro.push(text)
+      pendingIntro.push(rich)
       setRole('questionInstruction', roleStyle(ln.p))
       continue
     }
-    if (isIntro && !group) { pendingIntro.push(text); setRole('questionInstruction', roleStyle(ln.p)); continue }
+    if (isIntro && !group) { pendingIntro.push(rich); setRole('questionInstruction', roleStyle(ln.p)); continue }
 
     const g = ensureGroup()
-    if (item && item.kind === 'open_ended' && !item.lines) item.stem += `\n${text}`
-    else if (!item) { g.instruction = g.instruction ? `${g.instruction}\n${text}` : text; setRole(g.number !== undefined ? 'stem' : 'questionInstruction', roleStyle(ln.p)) }
-    else if (text.length >= 200) content.passages.push(text)
-    else g.instruction = g.instruction ? `${g.instruction}\n${text}` : text
+    if (item && item.kind === 'open_ended' && !item.lines) item.stem += `\n${rich}`
+    else if (!item) { g.instruction = g.instruction ? `${g.instruction}\n${rich}` : rich; setRole(g.number !== undefined ? 'stem' : 'questionInstruction', roleStyle(ln.p)) }
+    else if (text.length >= 200) content.passages.push(rich)
+    else g.instruction = g.instruction ? `${g.instruction}\n${rich}` : rich
   }
   if (pendingIntro.length) content.passages.push(...pendingIntro)
 
@@ -443,12 +456,45 @@ function countLabels(text: string): number {
 
 // ─── Linearização do corpo ──────────────────────────────────────────────────
 
+
+/**
+ * Normaliza tabs em texto de parágrafo:
+ *  - PTAB_MARKER (\x02) → '\x02' preservado (o render converte em espaçador elástico)
+ *  - tabs normais (\t) → espaço simples
+ */
+function collapseTabs(s: string): string {
+  return s.replace(/\t+/g, ' ').replace(/ +/g, ' ').trim()
+}
+
+/**
+ * Texto rico de uma alternativa: usa o rich do parágrafo mas remove o rótulo (A), b., etc.)
+ * que já foi extraído pelo OPTION_RE, preservando a formatação inline do conteúdo.
+ */
+function optionRich(ln: Line, plainText: string): string {
+  const full = ln.rich
+  const plainFull = ln.text
+  // encontra onde o texto da alternativa começa no rich
+  const idx = plainFull.indexOf(plainText)
+  if (idx < 0) return plainText
+  // conta quantos chars de rich correspondem aos chars antes do texto
+  let richPos = 0
+  let plainPos = 0
+  let inMarker = false
+  for (let i = 0; i < full.length; i++) {
+    if (full[i] === '\u27E6') { inMarker = true; richPos = i; continue }
+    if (inMarker && full[i] === '\u27E7') { inMarker = false; continue }
+    if (inMarker) continue
+    if (plainPos >= idx) { richPos = i; break }
+    plainPos++
+  }
+  return full.slice(richPos)
+}
 function linearize(blocks: Block[]): Array<Line & { blank?: number }> {
   const out: Array<Line & { blank?: number }> = []
   const emptyP = (): ParagraphBlock => ({ type: 'paragraph', runs: [] })
   for (const b of blocks) {
-    if (b.type === 'paragraph') out.push({ text: paragraphText(b).replace(/\t+/g, ' ').trim(), p: b, boxed: b.border === 'box' })
-    else if (b.type === 'blank_lines') out.push({ text: '', p: emptyP(), boxed: false, blank: b.count })
+    if (b.type === 'paragraph') out.push({ text: collapseTabs(paragraphText(b)), rich: collapseTabs(richText(b)), p: b, boxed: b.border === 'box' })
+    else if (b.type === 'blank_lines') out.push({ text: '', rich: '', p: emptyP(), boxed: false, blank: b.count })
     else if (b.type === 'table') {
       // tabela 1x1 = caixa (instruções, "QUESTÃO 01" encaixotado, texto-base). Outras: célula por célula.
       const isBox = b.rows.length === 1 && b.rows[0].length === 1
@@ -462,7 +508,7 @@ function matchOption(ln: Line): { letter: string; text: string; labelPattern: st
   const list = ln.p.list
   if (list && /letter/i.test(list.format)) {
     const letter = list.label.replace(/[^A-Za-z]/g, '') || 'a'
-    return { letter, text: ln.text, rawLabel: list.label, labelPattern: list.label.replace(/[A-Za-z]/, list.format === 'upperLetter' ? 'A' : 'a') }
+    return { letter, text: ln.rich, rawLabel: list.label, labelPattern: list.label.replace(/[A-Za-z]/, list.format === 'upperLetter' ? 'A' : 'a') }
   }
   const m = ln.text.match(OPTION_RE)
   if (!m) return null
@@ -501,6 +547,7 @@ function buildHeadingTemplate(h: RegExpMatchArray): string {
 }
 
 function normalizeTfMarker(m: string): string {
+  if (/^[☐□◻]$/.test(m)) return '☐'
   if (m.startsWith('[')) return '[ ]'
   if (m.startsWith('_')) return '___'
   const inner = m.length - 2

@@ -24,6 +24,8 @@ export interface HeaderField {
   /** Campo para o aluno preencher à mão (linha "_____") */
   blank?: boolean
   blankChars?: number
+  /** Padrão de preenchimento com separadores: "____/____/______" (mantém a barra e as lacunas) */
+  rawPattern?: string
   /** Texto fixo depois do campo: "/ 10,0" */
   suffix?: string
   /** Texto fixo sem campo (nome da escola, lema) */
@@ -107,7 +109,7 @@ export interface SchoolTemplate {
   /** Cabeçalho de página do Word, copiado como está (repete em toda página) */
   pageHeader?: Block[]
   header: HeaderLayout | null
-  instructions: { title?: string; items: string[]; boxed: boolean; titleStyle?: RunStyle } | null
+  instructions: { title?: string; items: string[]; itemLabels?: string[]; boxed: boolean; titleStyle?: RunStyle } | null
   examTitle?: { text: string; style: RunStyle; align?: Align; boxed?: boolean }
   question: QuestionPattern
   /** Estilo de cada papel, copiado do primeiro exemplo no arquivo */
@@ -205,6 +207,8 @@ export function splitFields(text: string): HeaderField[] {
 
 function parseFieldValue(slot: HeaderSlot, label: string, raw: string): HeaderField {
   const f: HeaderField = { slot, label }
+  // "____/____/______": lacunas com separadores (data) — preserva o padrão exato
+  if (/_{2,}/.test(raw) && /^[_\s/\-.]+$/.test(raw)) { f.blank = true; f.rawPattern = raw; return f }
   const blank = raw.match(/^(_{2,}|\.{4,}|…+)\s*(.*)$/)
   if (blank) {
     f.blank = true
@@ -249,8 +253,17 @@ export function formatOptionLabel(pattern: string, letter: string): string {
   return pattern.replace(/[A-Za-z]/, isLower ? lo : up)
 }
 
+const ROMAN = ['', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii', 'xiii', 'xiv', 'xv', 'xvi', 'xvii', 'xviii', 'xix', 'xx']
+
+/** Rótulo do subitem para o índice (1-based): "a)"→"b)", "I -"→"II -", "1."→"2." */
 export function formatSubItemLabel(pattern: string, index: number): string {
-  if (/[a-z]/.test(pattern) && !/^(i|v|x)+\b/i.test(pattern)) return pattern.replace(/[a-z]/, String.fromCharCode(96 + index))
-  if (/[A-Z]/.test(pattern) && !/^(I|V|X)+\b/.test(pattern)) return pattern.replace(/[A-Z]/, String.fromCharCode(64 + index))
-  return pattern.replace(/\d+/, String(index))
+  const roman = /^[ivx]+(?=[\s.)\-–]|$)/i.exec(pattern)
+  if (roman && index < ROMAN.length) {
+    const r = ROMAN[index]
+    return (roman[0] === roman[0].toUpperCase() ? r.toUpperCase() : r) + pattern.slice(roman[0].length)
+  }
+  if (/\d/.test(pattern)) return pattern.replace(/\d+/, String(index))
+  if (/[a-z]/.test(pattern)) return pattern.replace(/[a-z]/, String.fromCharCode(96 + index))
+  if (/[A-Z]/.test(pattern)) return pattern.replace(/[A-Z]/, String.fromCharCode(64 + index))
+  return pattern
 }

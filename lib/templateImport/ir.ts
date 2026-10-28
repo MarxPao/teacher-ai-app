@@ -16,6 +16,14 @@ export interface RunStyle {
   fontFamily?: string
   sizePt?: number
   color?: string // hex sem '#'
+  /** w:caps — texto exibido em caixa alta (o texto guardado é o original) */
+  caps?: boolean
+  /** w:smallCaps — versalete */
+  smallCaps?: boolean
+  /** w:vertAlign — "1º" com o º sobrescrito, "H₂O" */
+  vertAlign?: 'superscript' | 'subscript'
+  /** w:highlight — cor de destaque do Word (yellow, green, cyan...) */
+  highlight?: string
 }
 
 export interface TextRun extends RunStyle {
@@ -108,6 +116,23 @@ export interface DocumentIR {
 }
 
 // ─── Utilidades de texto ─────────────────────────────────────────────────────
+
+/**
+ * Texto do parágrafo com a formatação inline marcada: ⟦sup,caps⟧texto⟦/⟧
+ * Códigos: sup, sub, caps, sc, hl=<cor>. Usado para guardar enunciados e passagens;
+ * o render converte os marcadores em <span>.
+ */
+export function richText(p: ParagraphBlock): string {
+  return p.runs.map(r => {
+    const codes: string[] = []
+    if (r.vertAlign === 'superscript') codes.push('sup')
+    if (r.vertAlign === 'subscript') codes.push('sub')
+    if (r.caps) codes.push('caps')
+    if (r.smallCaps) codes.push('sc')
+    if (r.highlight) codes.push(`hl=${r.highlight}`)
+    return codes.length ? `⟦${codes.join(',')}⟧${r.text}⟦/⟧` : r.text
+  }).join('')
+}
 
 export function paragraphText(p: ParagraphBlock): string {
   return p.runs.map(r => r.text).join('').replace(/ /g, ' ')
