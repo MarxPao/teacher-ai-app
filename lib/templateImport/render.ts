@@ -45,14 +45,7 @@ const css = (s: RunStyle | undefined): string => {
     // Word reduz o sobrescrito/subscrito para cerca de 2/3 do tamanho
     out.push(`vertical-align:${s.vertAlign === 'superscript' ? 'super' : 'sub'}`, `font-size:${((s.sizePt || 11) * 0.66).toFixed(2)}pt`)
   }
-  if (s.highlight) out.push(`background-color:${HIGHLIGHT[s.highlight] || '#FFFF00'}`)
   return out.join(';')
-}
-
-const HIGHLIGHT: Record<string, string> = {
-  yellow: '#FFFF00', green: '#00FF00', cyan: '#00FFFF', magenta: '#FF00FF', blue: '#0000FF',
-  red: '#FF0000', darkBlue: '#000080', darkCyan: '#008080', darkGreen: '#008000', darkMagenta: '#800080',
-  darkRed: '#800000', darkYellow: '#808000', darkGray: '#808080', lightGray: '#C0C0C0', black: '#000000',
 }
 
 /**
@@ -326,10 +319,12 @@ export function richHtml(s: string): string {
         else if (c === 'sub') st.vertAlign = 'subscript'
         else if (c === 'caps') st.caps = true
         else if (c === 'sc') st.smallCaps = true
-        else if (c.startsWith('hl=')) st.highlight = c.slice(3)
       }
-      out += `<span style="${css(st)}">`
-      open = true
+      const spanCss = css(st)
+      if (spanCss) {
+        out += `<span style="${spanCss}">`
+        open = true
+      }
     }
   }
   out += plain(s.slice(last))

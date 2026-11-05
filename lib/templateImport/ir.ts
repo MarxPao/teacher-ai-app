@@ -129,7 +129,6 @@ export function richText(p: ParagraphBlock): string {
     if (r.vertAlign === 'subscript') codes.push('sub')
     if (r.caps) codes.push('caps')
     if (r.smallCaps) codes.push('sc')
-    if (r.highlight) codes.push(`hl=${r.highlight}`)
     return codes.length ? `⟦${codes.join(',')}⟧${r.text}⟦/⟧` : r.text
   }).join('')
 }
@@ -149,7 +148,7 @@ export function dominantStyle(p: ParagraphBlock): RunStyle {
   let best: TextRun | undefined
   for (const r of p.runs) if (r.text.trim() && (!best || r.text.length > best.text.length)) best = r
   if (!best) return {}
-  const { text: _t, ...style } = best
+  const { text: _t, highlight: _hl, ...style } = best
   return style
 }
 

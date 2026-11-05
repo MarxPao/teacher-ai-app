@@ -36,15 +36,16 @@ export function examFromLegacyItems(items: LegacyLike[], title?: string): Import
 
 /** Texto plano do conteúdo importado (para busca e para as heurísticas antigas) */
 export function importedExamToText(exam: ImportedExam): string {
+  const stripRich = (s: string) => s.replace(/⟦[^⟧]*⟧/g, '')
   const out: string[] = []
-  if (exam.title) out.push(exam.title)
-  out.push(...exam.passages)
+  if (exam.title) out.push(stripRich(exam.title))
+  out.push(...exam.passages.map(stripRich))
   for (const g of exam.groups) {
-    if (g.number !== undefined || g.title) out.push(`Question ${g.number ?? ''} ${g.title ?? ''}`.trim())
-    if (g.instruction) out.push(g.instruction)
+    if (g.number !== undefined || g.title) out.push(stripRich(`Question ${g.number ?? ''} ${g.title ?? ''}`.trim()))
+    if (g.instruction) out.push(stripRich(g.instruction))
     for (const it of g.items) {
-      out.push(`${it.label ?? ''} ${it.kind === 'true_false' ? '( ) ' : ''}${it.stem}`.trim())
-      for (const o of it.options || []) out.push(`${o.letter}) ${o.text}`)
+      out.push(stripRich(`${it.label ?? ''} ${it.kind === 'true_false' ? '( ) ' : ''}${it.stem}`.trim()))
+      for (const o of it.options || []) out.push(stripRich(`${o.letter}) ${o.text}`))
     }
   }
   return out.join('\n')

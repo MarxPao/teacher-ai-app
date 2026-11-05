@@ -141,3 +141,24 @@ describe('exportação usa o modelo da escola', async () => {
     expect(out.bodyHtml).not.toContain('#8b5e3c')
   })
 })
+
+describe('regressão: textos com w:highlight (white/yellow) não ficam grifados de amarelo (#FFFF00)', async () => {
+  const body =
+    P('<w:r><w:rPr><w:highlight w:val="white"/></w:rPr><w:t>Halloween began about 2,000 years ago with the Celts.</w:t></w:r>') +
+    P('<w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>Question 1 - Answer about Halloween (2,0 marks)</w:t></w:r>') +
+    P('<w:r><w:rPr><w:highlight w:val="white"/></w:rPr><w:t>1. When did Halloween start?</w:t></w:r>')
+  const ir = await parseDocx(await buildDocx(body))
+  const { template: t, content: c } = segmentDocument(ir, 'halloween.docx')
+  it('não contamina papéis nem renderiza background-color:#FFFF00', () => {
+    expect(t.roles.passage?.highlight).toBeUndefined()
+    expect(c.passages[0]).not.toContain('hl=')
+    const html = renderExamHtml(t, {
+      ...c,
+      passages: [...c.passages, '⟦hl=white⟧Legacy cached passage⟦/⟧'],
+    })
+    expect(html).not.toContain('#FFFF00')
+    expect(html).not.toContain('background-color')
+    expect(html).toContain('Halloween began about 2,000 years ago')
+    expect(html).toContain('Legacy cached passage')
+  })
+})

@@ -90,8 +90,6 @@ function readRunProps(rPr: XmlEl | null, theme?: ThemeFonts): RunStyle {
   if (small !== undefined) s.smallCaps = small
   const va = attr(kid(rPr, 'w:vertAlign'), 'w:val')
   if (va === 'superscript' || va === 'subscript') s.vertAlign = va
-  const hl = attr(kid(rPr, 'w:highlight'), 'w:val')
-  if (hl && hl !== 'none') s.highlight = hl
   return s
 }
 
