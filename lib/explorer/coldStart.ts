@@ -209,10 +209,11 @@ async function callLlmForPlan(
 
     if (config.provider === 'gemini') {
       // Google Generative Language API
-      const url = `${config.baseUrl}?key=${config.apiKey}`
+      // A2: chave enviada no header x-goog-api-key (nunca na URL — evita exposição em logs/proxies)
+      const url = config.baseUrl
       const res = await fetchFn(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {

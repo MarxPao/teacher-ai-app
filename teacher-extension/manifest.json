@@ -34,6 +34,16 @@
     "webNavigation"
   ],
   "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "*://*.paineldoaluno.com.br/*",
+    "*://*.machadosobrinho.com.br/*",
+    "*://*.machadosobrinho.paineldoaluno.com.br/*",
+    "*://*.redescola.com.br/*",
+    "*://*.sed.educacao.sp.gov.br/*",
+    "*://*.supabase.co/*"
+  ],
+  "optional_host_permissions": [
     "<all_urls>"
   ],
   "optional_permissions": [
@@ -43,7 +53,13 @@
   "content_scripts": [
     {
       "matches": [
-        "<all_urls>"
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "*://*.paineldoaluno.com.br/*",
+        "*://*.machadosobrinho.com.br/*",
+        "*://*.machadosobrinho.paineldoaluno.com.br/*",
+        "*://*.redescola.com.br/*",
+        "*://*.sed.educacao.sp.gov.br/*"
       ],
       "js": [
         "portal_normalizer.js",

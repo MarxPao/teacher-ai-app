@@ -63,22 +63,63 @@ function convertAnchor(rawAnchor: any): SkillAnchor | undefined {
   }
 }
 
-export async function OPTIONS() {
+// C8: origens permitidas — apenas extensões Chrome e localhost (dev)
+const ALLOWED_ORIGINS = [
+  // Extensão TeacherAI v3.1 (ID fixado pelo campo "key" do manifest)
+  'chrome-extension://bkeaopbcgnmlbgpgoheohbebimcnelok',
+  // Skill Recorder v0.1
+  'chrome-extension://okefemkkkjahfbnkfngfbkbfmmhdmhfp',
+  // Desenvolvimento local
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+]
+
+function getCorsHeaders(origin: string | null) {
+  const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Vary': 'Origin',
+  }
+}
+
+// C8: valida JWT Supabase emitido para o usuário autenticado
+async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
+  const authHeader = req.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const token = authHeader.slice(7)
+  try {
+    // Decodifica o payload JWT (sem verificação de assinatura no edge — Supabase RLS valida)
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
+    if (!payload?.sub || typeof payload.sub !== 'string') return null
+    // Verifica se não expirou
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null
+    return payload.sub
+  } catch {
+    return null
+  }
+}
+
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin')
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
+    headers: getCorsHeaders(origin),
   })
 }
 
 export async function POST(req: NextRequest) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
+  // C8: requer usuário autenticado
+  const userId = await getAuthenticatedUserId(req)
+  if (!userId) {
+    return NextResponse.json(
+      { ok: false, error: 'Não autorizado. Faça login no Teacher AI.' },
+      { status: 401, headers: corsHeaders }
+    )
   }
 
   try {
@@ -360,11 +401,14 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Next.js Skills API] ✅ Skill gravada com sucesso no disco: ${skillPath}`)
 
-    // Sincroniza em nuvem no Supabase (tabela portal_skills)
+    // C8: Sincroniza em nuvem no Supabase usando APENAS anon key + JWT do usuário autenticado.
+    // RLS na tabela portal_skills garante que cada professor só acessa os próprios grafos.
+    // NUNCA usar SUPABASE_SERVICE_ROLE_KEY aqui — bypassa RLS e dá acesso irrestrito.
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://parxakvjvuvsmvbvrshk.supabase.co'
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      if (supabaseUrl && serviceKey) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      const authHeader = req.headers.get('authorization') || ''
+      if (supabaseUrl && anonKey && authHeader) {
         const dbRow = {
           id: graph.id,
           portal_id: portalId,
@@ -386,14 +430,14 @@ export async function POST(req: NextRequest) {
         await fetch(`${supabaseUrl}/rest/v1/portal_skills?on_conflict=portal_id,task_id,version`, {
           method: 'POST',
           headers: {
-            'apikey': serviceKey,
-            'Authorization': `Bearer ${serviceKey}`,
+            'apikey': anonKey,
+            'Authorization': authHeader, // JWT do professor — RLS aplica restrições de ownership
             'Content-Type': 'application/json',
             'Prefer': 'resolution=merge-duplicates'
           },
           body: JSON.stringify(dbRow)
         })
-        console.log(`[Next.js Skills API] ☁️ Skill sincronizada com Supabase (portal_skills com idempotência): ${graph.id}`)
+        console.log(`[Next.js Skills API] ☁️ Skill sincronizada com Supabase via anon key + JWT: ${graph.id}`)
       }
     } catch (dbErr) {
       console.warn('[Next.js Skills API] Aviso: falha ao persistir no Supabase (mantido em disco):', dbErr)

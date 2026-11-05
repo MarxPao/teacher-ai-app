@@ -19,7 +19,12 @@ export async function OPTIONS() {
 
 function isAuthorized(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret) return true // Em desenvolvimento local ou se não configurado
+
+  // A15: se não há secret configurado, permite APENAS fora de produção
+  // (nunca deixar endpoint de purga aberto em produção sem autenticação)
+  if (!cronSecret) {
+    return process.env.NODE_ENV !== 'production'
+  }
 
   const authHeader = request.headers.get('authorization')
   const customHeader = request.headers.get('x-cron-secret')
@@ -28,11 +33,8 @@ function isAuthorized(request: NextRequest): boolean {
     return true
   }
 
-  // Permite autenticação do Supabase service role
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (serviceKey && (authHeader === `Bearer ${serviceKey}` || request.headers.get('apikey') === serviceKey)) {
-    return true
-  }
+  // A15: removido bypass por SUPABASE_SERVICE_ROLE_KEY — não deve haver service key em routes de API
+  // O cron deve ser acionado com CRON_SECRET, nunca com a service key do banco
 
   return false
 }

@@ -2,10 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { runNightlyConsolidation } from '@/lib/memoryConsolidation'
 import { purgeExpiredClassroomAudio } from '@/lib/classroomAudioPurge'
 
+// A14: endpoint interno — não aceita origens externas via browser
+// (chamado apenas por Vercel Cron, pg_cron ou admin autenticado)
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Origin': 'null', // sem origem = sem CORS cross-site
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-cron-secret',
+}
+
+// A14: valida secret de cron ou JWT de admin
+function isAuthorized(request: NextRequest): boolean {
+  const cronSecret = process.env.CRON_SECRET
+  const authHeader = request.headers.get('authorization')
+  const customHeader = request.headers.get('x-cron-secret')
+
+  // Em desenvolvimento local sem secret configurado — permite apenas se não for produção
+  if (!cronSecret) {
+    return process.env.NODE_ENV !== 'production'
+  }
+
+  if (cronSecret && (customHeader === cronSecret || authHeader === `Bearer ${cronSecret}`)) {
+    return true
+  }
+
+  return false
 }
 
 export async function OPTIONS() {
@@ -13,6 +33,10 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: NextRequest) {
+  // A14: GET expõe dados de consolidação — requer auth mesmo para dry-run
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ ok: false, error: 'Não autorizado.' }, { status: 401, headers: corsHeaders })
+  }
   try {
     const { searchParams } = new URL(request.url)
     const dryRun = searchParams.get('dryRun') !== 'false'
@@ -44,6 +68,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // A14: POST executa operações de purga e consolidação — requer auth obrigatória
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ ok: false, error: 'Não autorizado.' }, { status: 401, headers: corsHeaders })
+  }
   try {
     const body = await request.json().catch(() => ({}))
     const dryRun = Boolean(body.dryRun)

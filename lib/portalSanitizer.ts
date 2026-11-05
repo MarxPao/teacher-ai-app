@@ -150,24 +150,27 @@ async function getOrDeriveMasterKey(): Promise<CryptoKey> {
 }
 
 export async function encryptSensitiveText(plainText: string): Promise<string> {
-  try {
-    if (typeof window === 'undefined' || !plainText) return plainText
-    const key = await getOrDeriveMasterKey()
-    const iv = window.crypto.getRandomValues(new Uint8Array(12))
-    const enc = new TextEncoder()
-    const ciphertext = await window.crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      enc.encode(plainText)
-    )
-
-    const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('')
-    const cipherHex = Array.from(new Uint8Array(ciphertext)).map(b => b.toString(16).padStart(2, '0')).join('')
-    return `${ivHex}:${cipherHex}`
-  } catch (e) {
-    console.warn('Fallback de criptografia para texto simples:', e)
-    return plainText
+  // A3: em ambiente de servidor (SSR/Node) não há Web Crypto — retorna string vazia como sentinela.
+  // Callers DEVEM verificar se o resultado é string vazia e tratar como falha, nunca gravar plainText.
+  if (typeof window === 'undefined') {
+    throw new Error('encryptSensitiveText: Web Crypto API não disponível fora do browser. Dados não serão gravados sem criptografia.')
   }
+  if (!plainText) return plainText
+
+  // A3: lança exceção em vez de fazer fallback para plaintext — garante que dados sensíveis
+  // nunca sejam persistidos sem criptografia, nem mesmo em caso de erro de hardware/contexto.
+  const key = await getOrDeriveMasterKey()
+  const iv = window.crypto.getRandomValues(new Uint8Array(12))
+  const enc = new TextEncoder()
+  const ciphertext = await window.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    enc.encode(plainText)
+  )
+
+  const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('')
+  const cipherHex = Array.from(new Uint8Array(ciphertext)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return `${ivHex}:${cipherHex}`
 }
 
 export async function decryptSensitiveText(encryptedText: string): Promise<string> {
