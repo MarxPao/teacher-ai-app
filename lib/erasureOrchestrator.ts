@@ -94,8 +94,8 @@ export function eraseStudentData(studentId: string): ErasureReport {
       }
     }
 
-    // 6. Respostas do CAT engine � limpa filtrado por studentId no localStorage
-    //    (catEngine.ts � stateless; teacher_cat_responses � persistido diretamente)
+    // 6. Respostas do CAT engine � limpa filtrado por studentId no localStorage
+    //    (catEngine.ts � stateless; teacher_cat_responses � persistido diretamente)
     try {
       const catRaw = localStorage.getItem('teacher_cat_responses')
       if (catRaw) {
@@ -109,7 +109,7 @@ export function eraseStudentData(studentId: string): ErasureReport {
           report.keysAffected.push('teacher_cat_responses')
         }
       }
-    } catch { /* localStorage indispon�vel (SSR/Node) */ }
+    } catch { /* localStorage indispon�vel (SSR/Node) */ }
 
     report.success = true
   } catch (e: unknown) {
@@ -135,16 +135,16 @@ export function eraseStudentData(studentId: string): ErasureReport {
 
 /* ─── Helpers internos ──────────────────────────────────────────────────────── */
 
-function _eraseFromJsonArray(
+function _eraseFromJsonArray<T>(
   storageKey: string,
   _alias: string,
-  predicate: (item: unknown) => boolean,
+  predicate: (item: T) => boolean,
   report: ErasureReport
 ): void {
   try {
     const raw = localStorage.getItem(storageKey)
     if (!raw) return
-    const data: unknown[] = JSON.parse(raw)
+    const data: T[] = JSON.parse(raw) as T[]
     if (!Array.isArray(data)) return
     const before = data.length
     const filtered = data.filter((item) => !predicate(item))

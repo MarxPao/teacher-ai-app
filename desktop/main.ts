@@ -586,6 +586,10 @@ app.whenReady().then(async () => {
   setupIpcHandlers()
   createWindow()
 
+  // Gap 3: Supervisor -- health check e auto-start apos initCore()
+  startHealthCheck()
+  if (app.isPackaged) configureAutoStart(true)
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -597,6 +601,10 @@ app.on('window-all-closed', async () => {
     driver?.close()
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  stopHealthCheck()
 })
 
 // 3. Handlers IPC com Validação Zod e Lista de Permissão
@@ -617,9 +625,6 @@ function setupIpcHandlers() {
     }
 
 
-  // Gap 3: Supervisor -- iniciar health check e auto-start apos initCore()
-  startHealthCheck()
-  if (app.isPackaged) configureAutoStart(true)
     const schema = (MethodParamSchemas as any)[method]
     if (schema) {
       const parsed = schema.safeParse(params || {})
@@ -630,9 +635,6 @@ function setupIpcHandlers() {
           success: false,
           error: { code: 'E_VALIDATION_FAILED', message: 'Parâmetros inválidos.', details: parsed.error.format() },
 
-app.on('before-quit', () => {
-  stopHealthCheck()
-})
         }
       }
     }
@@ -704,18 +706,12 @@ function startHealthCheck(): void {
     try {
       // Verifica se SQLite responde
       if (driver) {
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('SQLite timeout')), 3000)
-          try {
-            // ping trivial — SELECT 1
-            driver!.prepare('SELECT 1').get()
-            clearTimeout(timeout)
-            resolve()
-          } catch (e) {
-            clearTimeout(timeout)
-            reject(e)
-          }
-        })
+        await Promise.race([
+          driver!.queryOne('SELECT 1'),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('SQLite timeout')), 3000)
+          ),
+        ])
       }
       // Saiu do modo degradado
       if (degradedMode) {
@@ -781,18 +777,3 @@ app.on('second-instance', () => {
     mainWindow.focus()
   }
 })
-
-// 3f. IPC para configurar auto-start e consultar modo degradado
-ipcMain.handle('supervisor:set-auto-start', (_event, enable: boolean) => {
-  configureAutoStart(enable)
-  return { success: true, enabled: enable }
-})
-
-ipcMain.handle('supervisor:status', () => {
-  return {
-    degradedMode,
-    consecutiveFailures,
-    autoStart: app.isPackaged ? app.getLoginItemSettings().openAtLogin : false,
-  }
-})
-
