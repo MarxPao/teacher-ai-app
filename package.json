@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "teacher-ai",
   "version": "0.1.0",
   "private": true,
@@ -23,7 +23,9 @@
     "community:demo": "npx tsx scripts/community/demo.ts",
     "community:import-check": "npx tsx scripts/community/import-check.ts",
     "build:ext": "npx tsx scripts/build-extension-runner.ts",
-    "gate:preflight": "npx tsx scripts/gate-a-preflight.ts"
+    "gate:preflight": "npx tsx scripts/gate-a-preflight.ts",
+    "installer:build": "npx tsx scripts/build-installer.ts",
+    "installer:build:skip-next": "cross-env SKIP_NEXT_BUILD=1 npx tsx scripts/build-installer.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -47,11 +49,15 @@
     "@types/pg": "^8.20.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "canvas": "^3.1.0",
+    "cross-env": "^7.0.3",
     "electron": "^34.5.8",
+    "electron-builder": "^25.1.8",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "jsdom": "^30.1.1",
     "pg": "^8.22.0",
+    "png-to-ico": "^2.1.8",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.0.5"

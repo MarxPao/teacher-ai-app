@@ -1,0 +1,95 @@
+﻿################################################################################
+# electron-builder.yml — Configuração do empacotador/instalador do TeacherAI
+#
+# Fluxo de build:
+#   1. next build        → .next/ (Next.js estático servido pelo Electron)
+#   2. desktop:build     → dist-desktop/ (main.js, preload.js, shim.js, shim.bat, ui/)
+#   3. installer:build   → release/ (TeacherAI-Setup-<ver>.exe via NSIS)
+#
+# Para gerar o instalador:
+#   npm run installer:build
+################################################################################
+
+appId: com.teacherai.desktop
+productName: TeacherAI
+copyright: "Copyright © 2024-2026 TeacherAI"
+
+# Ponto de entrada do processo main empacotado
+# (gerado pelo esbuild em dist-desktop/main.js)
+# electron-builder usa o campo "main" do package.json — ver scripts/build-installer.ts
+# que escreve package.json temporário dentro de dist-desktop/
+
+directories:
+  # Pasta raiz do "app" a empacotar — populada pelo script build-installer.ts
+  app: dist-desktop
+  # Pasta de saída dos instaladores
+  output: release
+  buildResources: build-resources
+
+# Arquivos incluídos dentro do asar/app empacotado
+files:
+  - "**/*"
+  - "!**/*.map"           # source maps: excluir para reduzir tamanho
+  - "!*.bat"              # shim.bat não deve entrar no asar (fica ao lado do exe)
+
+# O shim.bat precisa ficar FORA do asar, ao lado do TeacherAI.exe
+extraResources:
+  - from: dist-desktop/shim.bat
+    to: resources/shim.bat
+  - from: dist-desktop/shim.js
+    to: resources/shim.js
+
+# Ícone da aplicação (electron-builder precisa de .ico no Windows)
+# Criado automaticamente pelo script build-installer.ts a partir de public/icon-512.png
+# Caso queira fornecer diretamente: coloque icon.ico em build-resources/
+icon: build-resources/icon.ico
+
+################################################################################
+# Windows — NSIS installer
+################################################################################
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Assinatura de código: desabilitado por padrão; ative configurando
+  # CSC_LINK (caminho para .pfx) e CSC_KEY_PASSWORD no ambiente de CI
+  # signingHashAlgorithms: ["sha256"]
+
+nsis:
+  # Instalador de uma página, sem configuração de componentes
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  # Instala para o usuário atual por padrão (sem UAC obrigatório)
+  perMachine: false
+  # Registra no Painel de Controle > Programas
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: TeacherAI
+  # Nome do arquivo de saída
+  artifactName: "TeacherAI-Setup-${version}.exe"
+  # Permite que o instalador rode sem elevação quando possível
+  allowElevation: true
+  # Script NSIS adicional para registrar o Native Messaging Host
+  # (executado pelo próprio app no primeiro launch via autoRegisterNativeMessagingHost)
+  # include: build-resources/installer-extra.nsh  # opcional; ativar quando necessário
+
+################################################################################
+# macOS (futuro) — comentado até haver necessidade
+################################################################################
+# mac:
+#   target:
+#     - dmg
+#   category: public.app-category.education
+#   icon: build-resources/icon.icns
+# dmg:
+#   artifactName: "TeacherAI-${version}.dmg"
+
+################################################################################
+# Linux (futuro)
+################################################################################
+# linux:
+#   target:
+#     - AppImage
+#   category: Education
+#   icon: build-resources/icon.png
