@@ -245,15 +245,12 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
   let resultText = ''
 
   // 1. Anthropic Claude
+  // C4: chamadas Anthropic NUNCA ocorrem direto do browser — sempre via /api/agent backend.
+  // A Anthropic exige o flag 'anthropic-dangerously-allow-browser' para chamadas no browser,
+  // o que é explicitamente inseguro (expõe a chave em network logs, extensões, proxies).
+  // O backend /api/agent recebe a chave do usuário como userKey e a usa server-side.
   if (p === 'anthropic') {
-    const r = await guardEgressFetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
-      body: JSON.stringify({ model: model || 'claude-3-5-sonnet-20241022', max_tokens: 8192, messages: [{ role: 'user', content: safePrompt }] }),
-    })
-    const d = await r.json()
-    if (d.error) throw new Error(d.error.message || 'Erro na Anthropic Claude')
-    resultText = d.content?.map((c: any) => c.text).join('\n') || ''
+    return callBackendAgentFallback()
   }
 
   // 2. Provedores compatíveis com API OpenAI (OpenAI, DeepSeek, Groq, SiliconFlow, OpenRouter, Zhipu)
