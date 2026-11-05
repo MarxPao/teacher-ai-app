@@ -35,7 +35,7 @@ const NAV: Section[] = [
     { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'bulb' },
   ]},
   { label: 'Criação', items: [
-    { key: 'test_and_worksheets', label: 'Test & Worksheets',     icon: 'file-certificate' },
+    { key: 'test_and_worksheets', label: 'Provas & Atividades',   icon: 'file-certificate' },
     { key: 'qbank',               label: 'Banco de Atividades',   icon: 'archive' },
     { key: 'visualstudio',        label: 'Estúdio Visual & Artes',icon: 'palette' },
     { key: 'eventos',             label: 'Eventos Escolares',     icon: 'sparkles' },
@@ -48,7 +48,7 @@ const NAV: Section[] = [
     { key: 'livequiz',           label: 'Quiz ao Vivo',         icon: 'device-gamepad-2' },
     { key: 'classroommode',      label: 'Auxiliar de Sala',     icon: 'layout-dashboard' },
     { key: 'attendancelist',     label: 'Lista de Presença',    icon: 'list-check' },
-    { key: 'classroomanalytics', label: 'Classroom Analytics',  icon: 'device-analytics' },
+    { key: 'classroomanalytics', label: 'Dados da Sala de Aula', icon: 'device-analytics' },
   ]},
   { label: 'Alunos & Avaliação', items: [
     { key: 'omnigrader',     label: 'OmniCorretor',          icon: 'camera' },

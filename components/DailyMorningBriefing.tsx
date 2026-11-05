@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
+import { getGreeting } from '@/lib/greeting'
 import TeacherLogo, { TeacherOwlAvatar } from '@/components/TeacherLogo'
 import { loadChecklistTodos, ChecklistTodo } from '@/lib/checklistManager'
 import type { ModuleKey } from '@/app/page'
@@ -39,11 +40,8 @@ export default function DailyMorningBriefing({ onNavigate, currentClassesCount, 
     const collapsedPref = sessionStorage.getItem('teacher_briefing_collapsed')
     if (collapsedPref === 'true') setIsCollapsed(true)
 
-    // 2. Saudação baseada na hora
-    const hour = new Date().getHours()
-    if (hour >= 5 && hour < 12) setGreeting('Bom dia')
-    else if (hour >= 12 && hour < 18) setGreeting('Boa tarde')
-    else setGreeting('Boa noite')
+    // 2. Saudação baseada na hora — usa getGreeting() para manter consistência com o Dashboard (M4)
+    setGreeting(getGreeting())
 
     // 3. Data por extenso
     try {

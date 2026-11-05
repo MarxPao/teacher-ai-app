@@ -20,6 +20,55 @@ interface TopbarProps {
   onNavigate?: (module: ModuleKey) => void
 }
 
+/** Mapeia IDs internos de módulo para rótulos em português (M1).
+ *  Deve ser mantido em sincronia com os labels do Sidebar.tsx. */
+const MODULE_LABELS: Record<string, string> = {
+  dashboard:              'Início',
+  students:               'Alunos',
+  classes:                'Turmas',
+  organization:           'Escolas',
+  insights:               'Insights',
+  checklist:              'Checklist',
+  repo:                   'Biblioteca',
+  bncc:                   'Central BNCC',
+  privatetutoring:        'Alunos Particulares',
+  lessonstudio:           'Planejamento',
+  didacticsequence:       'Sequência Didática',
+  maestro:                'Maestro',
+  wellbeing:              'Bem-Estar',
+  calendar:               'Calendário',
+  mindmap:                'Mapa Mental',
+  meetingclassrecorder:   'Diário de Aulas',
+  classlog:               'Registro de Aula',
+  reflectivepractice:     'Reflexão da Prática',
+  test_and_worksheets:    'Provas & Atividades',
+  qbank:                  'Banco de Atividades',
+  visualstudio:           'Estúdio Visual & Artes',
+  eventos:                'Eventos Escolares',
+  rubric:                 'Rubrica & Gabarito',
+  editor:                 'Editor de Documentos',
+  audiopronunciation:     'Pronúncia & Áudio',
+  flashcardmode:          'Flashcards',
+  livequiz:               'Quiz ao Vivo',
+  classroommode:          'Auxiliar de Sala',
+  attendancelist:         'Lista de Presença',
+  classroomanalytics:     'Sala de Aula — Dados',
+  omnigrader:             'OmniCorretor',
+  gradebook:              'Caderneta de Notas',
+  analytics:              'Desempenho & Evolução',
+  portfolio:              'Portfólio',
+  communications:         'Comunicação',
+  autoreport:             'Relatórios Mensais',
+  settings:               'Preferências',
+  skills:                 'Skills dos Portais',
+  api:                    'Modelos de IA',
+  extensions:             'Portais Conectados & Extensões',
+}
+
+function resolveModuleLabel(moduleId: string): string {
+  return MODULE_LABELS[moduleId] ?? moduleId
+}
+
 const FONT_SCALES: { value: FontScale; label: string }[] = [
   { value: 85,  label: '85%' },
   { value: 100, label: '100%' },
@@ -171,7 +220,7 @@ export default function Topbar({ module, submodule, isAiLoading = false, onNavig
       <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
         <TeacherLogo size={24} variant="badge" rounded={6} />
         <span style={{ fontSize: TEXT.sm + 1, fontWeight: 700, color: COLOR.paperSepia, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {module}
+          {resolveModuleLabel(module)}
         </span>
         {submodule && (
           <>

@@ -1,5 +1,6 @@
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { getGreeting } from '@/lib/greeting'
 import ModuleShell from '@/components/ModuleShell'
 import type { ModuleKey } from '@/app/page'
 import SubstituteMode from '@/components/SubstituteMode'
@@ -223,9 +224,10 @@ export default function Dashboard() {
   // Carregamento de dados unificado
   const loadDashboardData = () => {
     const now = new Date()
-    const hour = now.getHours()
-    setGreeting(hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite')
-    setDateStr(now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
+    setGreeting(getGreeting(now))
+    // Capitaliza apenas a primeira letra da string de data (M4).
+    const rawDate = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    setDateStr(rawDate.charAt(0).toUpperCase() + rawDate.slice(1).toLowerCase())
 
     const todayKey = formatDateKey(now)
 
