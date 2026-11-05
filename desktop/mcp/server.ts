@@ -1,4 +1,4 @@
-﻿/**
+/**
  * desktop/mcp/server.ts -- Gap 9: MCP Server stdio (read-only)
  *
  * Expoe dados educacionais do Teacher AI como servidor MCP via stdio.
@@ -11,8 +11,7 @@
  * Storage: SQLite real via NodeSqliteDriver (Gap 9 corrigido -- antes usava JSON cache)
  *
  * Inicializacao: chamado pelo Electron main process via child_process.spawn()
- * ou diretamente como CLI: 
-ode desktop/mcp/server.js
+ * ou diretamente como CLI: `node desktop/mcp/server.js <caminho-do-banco>`
  */
 
 import * as readline from 'node:readline'
@@ -121,16 +120,16 @@ async function searchItems(params: Record<string, unknown>): Promise<unknown> {
 
   if (skill) {
     conditions.push('(skill_code = ? OR skill_code LIKE ?)')
-    sqlParams.push(skill, ${skill}%)
+    sqlParams.push(skill, `${skill}%`)
   }
 
-  const sql = 
+  const sql = `
     SELECT id, statement, skill_code AS skill, difficulty, tags
     FROM assessment_items
-    WHERE 
+    WHERE ${conditions.join(' AND ')}
     ORDER BY difficulty
     LIMIT ?
-  
+  `
   sqlParams.push(limit)
 
   interface ItemRow { id: string; statement: string; skill: string; difficulty: number; tags: string | null }
@@ -175,15 +174,15 @@ async function classMasterySummary(params: Record<string, unknown>): Promise<unk
     sqlParams.push(skillCode)
   }
 
-  const sql = 
+  const sql = `
     SELECT class_id AS classId, skill_code AS skillCode,
            avg_mastery AS avgMastery, student_count AS studentCount,
            updated_at AS updatedAt
     FROM class_skill_mastery
-    WHERE 
+    WHERE ${conditions.join(' AND ')}
     ORDER BY class_id, skill_code
     LIMIT 200
-  
+  `
 
   interface MasteryRow { classId: string; skillCode: string; avgMastery: number; studentCount: number; updatedAt: string }
   const rows = await db.query<MasteryRow>(sql, sqlParams)
@@ -208,14 +207,14 @@ async function draftAssessment(params: Record<string, unknown>): Promise<unknown
   const selected: ItemRow[] = []
 
   for (const skill of skillList) {
-    const sql = 
+    const sql = `
       SELECT id, statement, skill_code AS skill, difficulty, tags
       FROM assessment_items
       WHERE skill_code = ? OR skill_code LIKE ?
       ORDER BY ABS(difficulty - ?) ASC
       LIMIT ?
-    
-    const rows = await db.query<ItemRow>(sql, [skill, ${skill}%, targetDifficulty, needed])
+    `
+    const rows = await db.query<ItemRow>(sql, [skill, `${skill}%`, targetDifficulty, needed])
     selected.push(...rows)
   }
 
