@@ -380,7 +380,7 @@ describe('Fase 7 - Núcleo Comunitário: Teste de Fronteira', () => {
       const driver = new MemoryDriver()
       const runner = new MigrationRunner(driver as any)
       const res = await runner.run()
-      expect(res.applied).toBe(2)
+      expect(res.applied).toBe(3) // v1 initial_schema + v2 community_schema + v3 mcp_items_and_mastery
 
       const tables = await driver.query(
         "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'community_%'"
