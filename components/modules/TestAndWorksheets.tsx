@@ -653,7 +653,11 @@ Gere agora todas as ${totalQuestions} questões completas estruturadas em JSON:`
       setResult(html)
 
       // Auditoria de qualidade psicométrica dos distratores (Fase 2 - distractorQualityAuditor)
+      // M6: resultado agora alimenta aviso ao professor quando a cobertura psicométrica for insuficiente
       const distractorAudit = auditExamDistractors(parsed, activeProfile)
+      if (distractorAudit.totalMultipleChoice > 0 && distractorAudit.coveragePercentage < 50) {
+        toast.warning(`⚠️ Distratores: ${distractorAudit.summaryLabel}`)
+      }
 
       // Fase 2: Gate de Contagem e Integridade Estrutural
       const completeness = checkGenerationCompleteness(totalQuestions, parsed)

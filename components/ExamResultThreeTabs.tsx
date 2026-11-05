@@ -145,7 +145,9 @@ import {
   type ClassDiagnosticSummary
 } from '@/lib/standardsReportingEngine'
 import { generateAnalyticalRubric, type AnalyticalRubric } from '@/lib/analyticalRubricGenerator'
-import { estimateStudentEmpiricalBKTParams, DEFAULT_BKT_PARAMS, type EmpiricalBKTParametersResult } from '@/lib/bktEngine'
+// M11: bktEngine — calibração empírica de slip/guess requer histórico real de respostas por aluno/item.
+// estimateStudentEmpiricalBKTParams é chamada indiretamente por processOMRBatchAndUpdatePsychometrics
+// (lib/omr) após processamento de folhas no OmniGrader. Import direto removido (símbolo morto aqui).
 
 export type ResultTabKey = 'document' | 'topics' | 'rationale'
 
