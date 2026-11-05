@@ -1,4 +1,4 @@
-﻿/**
+/**
  * extension/permissionsManager.js — Gap 13: Dynamic Permissions
  *
  * Gerencia permissões opcionais de host dinamicamente via chrome.permissions API.

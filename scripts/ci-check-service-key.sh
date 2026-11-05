@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # ci-check-service-key.sh — Gap 2 regression guard
 # Garante que SUPABASE_SERVICE_ROLE_KEY nunca re-entre no codebase.
 # Executar no CI antes do build.
