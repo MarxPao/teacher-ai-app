@@ -1,4 +1,4 @@
-name: Security & Quality Audit
+﻿name: Security & Quality Audit
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main, master ]
 
 jobs:
-  # ── Gate 1: TypeScript + npm security + anti-mock + Vitest (unit only) ──────
+  # -- Gate 1: TypeScript + npm security + anti-mock + Vitest (unit only) ------
   node_gates:
     name: Node / TypeScript / Vitest
     runs-on: ubuntu-latest
@@ -28,8 +28,18 @@ jobs:
       - name: TypeScript type-check
         run: npx tsc --noEmit
 
-      - name: Package security audit (high + critical)
-        run: npm audit --audit-level=high
+      # C5: auditoria de deps -- falha em HIGH ou CRITICAL em producao
+      - name: Package security audit (high + critical, prod only)
+        run: npm audit --omit=dev --audit-level=high
+
+      # A2: verificacao de que chave Gemini nao esta mais na URL
+      - name: Verificar chave Gemini nao na URL (A2)
+        run: |
+          if grep -r "baseUrl.*key=" lib/explorer/ 2>/dev/null; then
+            echo "FALHA: chave de API Gemini encontrada em URL -- use header x-goog-api-key (A2)"
+            exit 1
+          fi
+          echo "OK: chave Gemini nao encontrada em URLs"
 
       - name: Zero-simulation / anti-mock audit
         run: node scripts/scan-mocks.mjs
@@ -37,9 +47,25 @@ jobs:
       - name: SERVICE_ROLE_KEY leak check (Gap 2 security gate)
         run: bash scripts/ci-check-service-key.sh
 
-      - name: Vitest — unit tests only
-        # Exclude browser-automation, integration, live-portal and E2E tests
-        # that require a real Chrome / extension / network
+      # C7/A11: sidecar aposentado -- garante que child_process nao foi re-introduzido
+      - name: Verificar sidecar aposentado -- sem child_process na rota (C7)
+        run: |
+          if grep -E "^import.*child_process|execAsync|execSync" app/api/sidecar-task/route.ts 2>/dev/null; then
+            echo "FALHA: child_process encontrado em sidecar-task/route.ts -- C7 regrediu!"
+            exit 1
+          fi
+          echo "OK: sidecar-task/route.ts sem execucao de processos"
+
+      # A13: CI gate -- CRON_SECRET obrigatorio em producao
+      - name: Verificar hardening de CRON_SECRET nos endpoints (A13)
+        run: |
+          if grep -r "if (!cronSecret) return true" app/api/ 2>/dev/null; then
+            echo "FALHA: bypass de autenticacao quando CRON_SECRET ausente -- A13 regrediu!"
+            exit 1
+          fi
+          echo "OK: sem bypass de CRON_SECRET"
+
+      - name: Vitest -- unit tests only
         run: |
           npx vitest run \
             --reporter=verbose \
@@ -52,49 +78,16 @@ jobs:
             --exclude '**/*liveGraph*' \
             --exclude '**/*e2e*'
 
-  # ── Gate 2: Python / pytest — sidecar unit tests ────────────────────────────
-  python_gates:
-    name: Python / pytest (sidecar)
-    runs-on: ubuntu-latest
+  # -- Gate 2: Python / pytest -- REMOVIDO (sidecar Python aposentado na Fase 6) -
+  # O sidecar Python foi aposentado. Toda automacao de portais agora ocorre via
+  # extensao TeacherAI v3.1 (nativeMessaging). Ver: sidecar/README.md (C7)
+  #
+  # python_gates: <- APOSENTADO
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: sidecar/requirements.txt
-
-      - name: Install Python dependencies
-        run: pip install -r sidecar/requirements.txt
-
-      - name: pytest — sidecar unit tests
-        # Exclude E2E / browser-harness files that need a live Chrome session
-        run: |
-          pytest sidecar/tests/ \
-            --ignore=sidecar/e2e_autonomous_validation.py \
-            --ignore=sidecar/e2e_listener_pipeline_test.py \
-            --ignore=sidecar/browser_harness_runner.py \
-            --ignore=sidecar/tests/test_e2e_real_legacy_portal.py \
-            --ignore=sidecar/tests/test_e2e_real_sandbox_portal.py \
-            --ignore=sidecar/tests/test_live_learning_flow.py \
-            --ignore=sidecar/tests/test_live_learning_success_e2e.py \
-            --ignore=sidecar/tests/test_ppav_loop_real_e2e.py \
-            --ignore=sidecar/tests/test_side_panel_approval_card_e2e.py \
-            --ignore=sidecar/tests/test_side_panel_consolidated_ux.py \
-            --ignore=sidecar/tests/test_read_roster_sandbox.py \
-            -x \
-            -v \
-            --tb=short
-
-  # ── Gate 3: Next.js production build ────────────────────────────────────────
+  # -- Gate 3: Next.js production build ----------------------------------------
   build_gate:
     name: Next.js Build
     runs-on: ubuntu-latest
-    # Run build only after type-check and tests pass to save CI minutes
     needs: [ node_gates ]
 
     steps:
@@ -113,5 +106,4 @@ jobs:
       - name: Next.js production build
         run: npm run build
         env:
-          # Silence telemetry noise in CI logs
           NEXT_TELEMETRY_DISABLED: '1'
