@@ -1153,6 +1153,12 @@ export function purgeMockDataFromStorage(): void {
 /**
  * Salva um snapshot de Insights diretamente na tabela pedagogical_insights do Supabase.
  */
+/**
+ * Chave de consentimento para sincronização de insights pedagógicos com Supabase.
+ * M5: O professor deve ter optado explicitamente (opt-in) para que dados sejam enviados.
+ */
+export const INSIGHTS_SYNC_CONSENT_KEY = 'teacher_insights_cloud_sync_consent_v1'
+
 export async function savePedagogicalInsightToSupabase(insight: {
   schoolId?: string
   school?: string
@@ -1169,6 +1175,14 @@ export async function savePedagogicalInsightToSupabase(insight: {
   criticalTopics?: any[]
   aiReport?: string
 }): Promise<{ ok: boolean; error?: string }> {
+  // M5 — Gate de consentimento LGPD: sincronização só ocorre se professor optou explicitamente
+  if (typeof window !== 'undefined') {
+    const consent = localStorage.getItem(INSIGHTS_SYNC_CONSENT_KEY)
+    if (consent !== 'true') {
+      return { ok: true } // Sem consentimento: retorna sucesso silencioso (sem envio)
+    }
+  }
+
   const cfg = getSupabaseConfig()
   if (!cfg?.url) return { ok: true }
   const apiKey = getActiveKey(cfg)

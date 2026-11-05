@@ -1,9 +1,17 @@
 /**
  * omrEngine.ts — Motor de Reconhecimento Óptico de Gabarito (OMR Determinístico)
- * 
+ *
  * Processa a folha de respostas no espaço canônico, computa a densidade óptica
  * de preenchimento (Fill Ratio) de cada círculo de alternativa, aplica regras de
  * contraste relativo e classifica cada questão com confiança (Alta / Média / Baixa).
+ *
+ * @status EM DESENVOLVIMENTO — módulo ainda não conectado à UI.
+ *   Dependências pendentes de implementação:
+ *   - lib/omr/types.ts       (ExamSheetLayout, OMRSheetResult, etc.)
+ *   - lib/omr/fiducialDetector.ts  (detectSheetFiducials, toGrayscale)
+ *   - lib/omr/perspectiveTransformer.ts  (computeHomography, applyHomography)
+ *   O OmniGrader usa OCR genérico até que estas dependências sejam implementadas.
+ *   Ref: A9 — Wave 3 auditoria.
  */
 
 import {

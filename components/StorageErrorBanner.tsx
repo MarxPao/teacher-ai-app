@@ -1,33 +1,36 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+/**
+ * StorageErrorBanner.tsx — Banner global de erro de armazenamento local.
+ *
+ * Ouve o evento 'teacher:storage-error' emitido por lib/localDB.ts (safeSet)
+ * e exibe um aviso visível ao professor quando o localStorage atinge o limite
+ * de 5 MB ou quando qualquer escrita falha.
+ *
+ * Fix: A8 — QuotaExceededError silencioso → alertar usuário com banner.
+ */
 
-export interface StorageErrorDetail {
-  key?: string
-  reason?: string
-  error?: any
+import { useEffect, useState } from 'react'
+
+interface StorageError {
+  key: string
+  reason: string
 }
 
 export default function StorageErrorBanner() {
-  const [errorInfo, setErrorInfo] = useState<StorageErrorDetail | null>(null)
-  const [visible, setVisible] = useState(false)
+  const [error, setError] = useState<StorageError | null>(null)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const handleStorageError = (event: Event) => {
-      const customEvent = event as CustomEvent<StorageErrorDetail>
-      setErrorInfo(customEvent.detail || {})
-      setVisible(true)
+    function handleStorageError(e: Event) {
+      const ce = e as CustomEvent<StorageError>
+      setError(ce.detail)
     }
 
     window.addEventListener('teacher:storage-error', handleStorageError)
-    return () => {
-      window.removeEventListener('teacher:storage-error', handleStorageError)
-    }
+    return () => window.removeEventListener('teacher:storage-error', handleStorageError)
   }, [])
 
-  if (!visible) return null
+  if (!error) return null
 
   return (
     <div
@@ -35,69 +38,48 @@ export default function StorageErrorBanner() {
       aria-live="assertive"
       style={{
         position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        maxWidth: '460px',
-        backgroundColor: '#fff1f2',
-        border: '1px solid #fecdd3',
-        borderRadius: '12px',
-        padding: '16px 20px',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-        zIndex: 99999,
-        fontFamily: 'inherit',
-        color: '#881337',
+        bottom: '1rem',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+        maxWidth: '480px',
+        width: 'calc(100% - 2rem)',
+        background: '#7f1d1d',
+        color: '#fef2f2',
+        borderRadius: '0.5rem',
+        padding: '0.75rem 1rem',
         display: 'flex',
-        flexDirection: 'column',
-        gap: '8px'
+        alignItems: 'flex-start',
+        gap: '0.5rem',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        fontSize: '0.875rem',
+        lineHeight: '1.4',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, fontSize: '15px' }}>
-          <span style={{ fontSize: '18px' }}>⚠️</span>
-          <span>Atenção: Dados Não Salvos</span>
-        </div>
-        <button
-          onClick={() => setVisible(false)}
-          aria-label="Fechar aviso"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#9f1239',
-            cursor: 'pointer',
-            fontSize: '18px',
-            lineHeight: 1,
-            padding: '2px 4px',
-            borderRadius: '4px'
-          }}
-        >
-          ✕
-        </button>
+      <span style={{ fontSize: '1rem', flexShrink: 0, marginTop: '1px' }}>⚠️</span>
+      <div style={{ flex: 1 }}>
+        <strong>Falha ao salvar dados localmente</strong>
+        <p style={{ margin: '2px 0 0', opacity: 0.9 }}>{error.reason}</p>
+        <p style={{ margin: '4px 0 0', opacity: 0.75, fontSize: '0.78rem' }}>
+          Libere espaço nos dados do aplicativo ou exporte um backup antes de continuar.
+        </p>
       </div>
-
-      <p style={{ margin: 0, fontSize: '13.5px', lineHeight: 1.45, color: '#9f1239' }}>
-        Não foi possível gravar as alterações recentes no navegador (o limite de memória local foi atingido).
-      </p>
-
-      <div
+      <button
+        onClick={() => setError(null)}
+        aria-label="Fechar aviso"
         style={{
-          marginTop: '4px',
-          padding: '8px 10px',
-          backgroundColor: '#ffe4e6',
-          borderRadius: '8px',
-          fontSize: '12.5px',
-          lineHeight: 1.4,
-          color: '#be123c'
+          background: 'transparent',
+          border: 'none',
+          color: '#fecaca',
+          cursor: 'pointer',
+          fontSize: '1rem',
+          padding: '0',
+          lineHeight: 1,
+          flexShrink: 0,
         }}
       >
-        💡 <strong>Recomendação:</strong> Acesse a aba <strong>Configurações (Settings)</strong> e faça um{' '}
-        <strong>Backup</strong> dos seus materiais e turmas para liberar espaço com segurança.
-      </div>
-
-      {errorInfo?.key && (
-        <span style={{ fontSize: '11px', opacity: 0.7, color: '#9f1239' }}>
-          Registro afetado: <code>{errorInfo.key}</code>
-        </span>
-      )}
+        ✕
+      </button>
     </div>
   )
 }

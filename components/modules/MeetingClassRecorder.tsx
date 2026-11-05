@@ -4,7 +4,8 @@ import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef, CSSProperties } from 'react';
 import { exportToPdf } from '@/lib/exportUtils';
-import { extractAndRecordMeetingStudentMentions } from '@/lib/studentMemory';
+import { extractAndRecordMeetingStudentMentions } from '@/lib/studentMemory'
+import { safeGet, safeSet, KEYS } from '@/lib/localDB';
 
 // --- Interfaces ---
 interface TranscriptionSegment {
@@ -69,13 +70,10 @@ export default function MeetingClassRecorder() {
 
   // --- Initialization ---
   useEffect(() => {
-    const saved = localStorage.getItem('teacher_meeting_diaries');
-    if (saved) {
-      try {
-        setRecords(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse records', e);
-      }
+    // M3: usar safeGet do localDB (emite teacher:storage-error em caso de quota/erro)
+    const saved = safeGet<MeetingRecord[]>(KEYS.MEETINGS, []);
+    if (saved.length > 0) {
+      setRecords(saved);
     }
   }, []);
 
@@ -238,7 +236,8 @@ export default function MeetingClassRecorder() {
       
       const updatedRecords = [newRecord, ...records];
       setRecords(updatedRecords);
-      localStorage.setItem('teacher_meeting_diaries', JSON.stringify(updatedRecords));
+      // M3: safeSet emite 'teacher:storage-error' se localStorage atingir quota
+      safeSet(KEYS.MEETINGS, updatedRecords);
 
       // Extração de menções a alunos — exige confirmação do professor antes de gravar na memória
       try {
@@ -739,7 +738,28 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
       {inputMode === 'mic' ? (
         <div style={styles.recordingCard}>
           <div style={styles.timer}>{formatTime(recordingTime)}</div>
-          
+
+          {/* M4: Aviso obrigatório de STT via Google Web Speech API */}
+          <div style={{
+            background: 'rgba(200,122,30,0.12)',
+            border: '1px solid rgba(200,122,30,0.35)',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            fontSize: '12px',
+            color: '#7a4e10',
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'flex-start',
+            marginBottom: '8px',
+          }}>
+            <span style={{ flexShrink: 0 }}>ℹ️</span>
+            <span>
+              <strong>Transcrição via Google Web Speech API.</strong> O áudio é processado nos
+              servidores do Google durante a gravação. Não grave dados sensíveis de alunos
+              sem consentimento explícito (LGPD).
+            </span>
+          </div>
+
           <div style={styles.recordControls}>
             {!isRecording ? (
               <button style={styles.btnRecord} onClick={startRecording} title="Iniciar Gravação">
@@ -870,6 +890,19 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
           <div style={styles.reportSection}>
             <div style={styles.reportTitle}>
               <i className="ti ti-bulb" style={{ color: theme.primary }}></i> Destaques / Incidentes
+            </div>
+            {/* M1 — Interface Honesta: destaques são inferências do LLM, não fatos auditados */}
+            <div style={{
+              background: 'rgba(200,122,30,0.10)',
+              border: '1px solid rgba(200,122,30,0.3)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '11px',
+              color: '#7a4e10',
+              marginBottom: '10px',
+            }}>
+              ⚠️ <strong>Revisão necessária:</strong> Estes itens foram identificados automaticamente pelo
+              modelo de IA com base na transcrição. Verifique antes de registrar formalmente.
             </div>
             <ul style={styles.list}>
               {rep.studentHighlights.map((h, idx) => (
